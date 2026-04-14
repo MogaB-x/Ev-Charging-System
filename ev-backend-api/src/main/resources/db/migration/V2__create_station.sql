@@ -1,0 +1,15 @@
+CREATE TYPE station_status AS ENUM ('AVAILABLE', 'OFFLINE', 'UNAVAILABLE', 'FAULTED', 'MAINTENANCE');
+
+CREATE TABLE IF NOT EXISTS stations (
+	id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	station_code VARCHAR(100) NOT NULL UNIQUE,
+	station_name VARCHAR(150) NOT NULL,
+	location_text VARCHAR(255),
+	status station_status NOT NULL,
+	model VARCHAR(100),
+	firmware_version VARCHAR(100),
+	ocpp_identity VARCHAR(100) NOT NULL UNIQUE,
+	last_seen_at TIMESTAMPTZ,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
