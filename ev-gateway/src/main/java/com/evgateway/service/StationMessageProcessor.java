@@ -1,5 +1,7 @@
 package com.evgateway.service;
 
+import com.evgateway.messaging.StationBootReceivedEvent;
+import com.evgateway.messaging.publisher.StationEventPublisher;
 import com.evgateway.websocket.dto.BootNotificationResponse;
 import com.evgateway.websocket.dto.HeartbeatResponse;
 import com.evgateway.websocket.dto.StationMessage;
@@ -21,11 +23,15 @@ public class StationMessageProcessor {
     private final ObjectMapper objectMapper;
     private final StationRegistryService stationRegistryService;
     private final StationBackendClient stationBackendClient;
+    private final StationEventPublisher stationEventPublisher;
 
-    public StationMessageProcessor(StationRegistryService stationRegistryService, StationBackendClient stationBackendClient) {
+    public StationMessageProcessor(StationRegistryService stationRegistryService,
+                                   StationBackendClient stationBackendClient,
+                                   StationEventPublisher stationEventPublisher) {
         this.objectMapper = new ObjectMapper();
         this.stationRegistryService = stationRegistryService;
         this.stationBackendClient = stationBackendClient;
+        this.stationEventPublisher = stationEventPublisher;
     }
 
     public void process(WebSocketSession session, String payload) throws Exception {
@@ -50,13 +56,45 @@ public class StationMessageProcessor {
 
         if (message.getStationIdentity() == null || message.getStationIdentity().isBlank()) {
             log.warn("BOOT without stationIdentity");
+            BootNotificationResponse response = new BootNotificationResponse(
+                    "BOOT_NOTIFICATION_RESPONSE",
+                    "REJECTED"
+            );
+
+            String json = objectMapper.writeValueAsString(response);
+            session.sendMessage(new TextMessage(json));
             return;
         }
 
-        boolean exists = stationBackendClient.stationExists(message.getStationIdentity());
+        try {
+            StationBootReceivedEvent event = new StationBootReceivedEvent(
+                    message.getStationIdentity(),
+                    message.getModel(),
+                    message.getFirmwareVersion(),
+                    Instant.now()
+            );
 
-        if (!exists) {
-            log.warn("Rejecting station: {}", message.getStationIdentity());
+            stationEventPublisher.publishBootNotification(event);
+
+            stationRegistryService.registerBoot(
+                    message.getStationIdentity(),
+                    session,
+                    message.getModel(),
+                    message.getFirmwareVersion()
+            );
+
+            BootNotificationResponse response = new BootNotificationResponse(
+                    "BOOT_NOTIFICATION_RESPONSE",
+                    "ACCEPTED"
+            );
+
+            String jsonResponse = objectMapper.writeValueAsString(response);
+            session.sendMessage(new TextMessage(jsonResponse));
+
+            log.info("boot notification published to RabbitMQ and response sent");
+
+        } catch (Exception e) {
+            log.error("Failed to publish boot notification to RabbitMQ", e);
 
             BootNotificationResponse response = new BootNotificationResponse(
                     "BOOT_NOTIFICATION_RESPONSE",
@@ -65,30 +103,7 @@ public class StationMessageProcessor {
 
             String json = objectMapper.writeValueAsString(response);
             session.sendMessage(new TextMessage(json));
-
-            session.close();
-
-            return;
         }
-
-        log.info("Station validated in backend: {}", message.getStationIdentity());
-
-        stationRegistryService.registerBoot(
-                message.getStationIdentity(),
-                session,
-                message.getModel(),
-                message.getFirmwareVersion()
-        );
-
-        BootNotificationResponse response = new BootNotificationResponse(
-                "BOOT_NOTIFICATION_RESPONSE",
-                "ACCEPTED"
-        );
-
-        String jsonResponse = objectMapper.writeValueAsString(response);
-        session.sendMessage(new TextMessage(jsonResponse));
-
-        log.info("boot notification response sent");
     }
 
     private void handleHeartbeat(WebSocketSession session, StationMessage message) throws Exception {

@@ -41,6 +41,19 @@ public class StationAuditLogger {
         LOGGER.warn("STATION_FETCH_BY_OCPP_IDENTITY_FAILURE ocppIdentity={} reason={}", ocppIdentity, reason);
     }
 
+    public void bootNotificationFailure(String ocppIdentity, String reason) {
+        LOGGER.warn("STATION_BOOT_NOTIFICATION_FAILURE ocppIdentity={} reason={}", ocppIdentity, reason);
+    }
+
+    public void bootNotificationSuccess(Long stationId, String stationCode, String ocppIdentity) {
+        LOGGER.info(
+                "STATION_BOOT_NOTIFICATION_SUCCESS stationId={} stationCode={} ocppIdentity={}",
+                stationId,
+                stationCode,
+                ocppIdentity
+        );
+    }
+
     public void unexpectedError(String action, String reference, Exception ex) {
         LOGGER.error("STATION_UNEXPECTED_ERROR action={} reference={} message={}", action, reference, ex.getMessage(), ex);
     }

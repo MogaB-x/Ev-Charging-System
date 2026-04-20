@@ -3,6 +3,7 @@ package com.chargeflow.station.service;
 import com.chargeflow.common.exception.ConflictException;
 import com.chargeflow.common.exception.NotFoundException;
 import com.chargeflow.logger.StationAuditLogger;
+import com.chargeflow.messaging.StationBootReceivedEvent;
 import com.chargeflow.station.dto.CreateStationRequest;
 import com.chargeflow.station.dto.StationResponse;
 import com.chargeflow.station.dto.UpdateStationRequest;
@@ -15,6 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +38,32 @@ public class StationServiceImpl implements StationService {
             stationAuditLogger.unexpectedError("getActiveStations", "AVAILABLE", ex);
             throw ex;
         }
+    }
+
+    @Transactional
+    public void handleBootNotification(StationBootReceivedEvent event) {
+        Optional<Station> optionalStation =
+                stationRepository.findByOcppIdentity(event.getStationIdentity());
+
+        if (optionalStation.isEmpty()) {
+            stationAuditLogger.bootNotificationFailure(event.getStationIdentity(), "Station not found");
+            return;
+        }
+
+        Station station = optionalStation.get();
+        station.setModel(event.getModel());
+        station.setFirmwareVersion(event.getFirmwareVersion());
+        station.setLastSeenAt(event.getReceivedAt() != null
+                ? OffsetDateTime.ofInstant(event.getReceivedAt(), ZoneOffset.UTC)
+                : null);
+        station.setStatus(StationStatus.AVAILABLE);
+
+        Station savedStation = stationRepository.save(station);
+        stationAuditLogger.bootNotificationSuccess(
+                savedStation.getId(),
+                savedStation.getStationCode(),
+                savedStation.getOcppIdentity()
+        );
     }
 
     @Override
