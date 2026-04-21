@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -15,5 +15,5 @@ public class StationBootReceivedEvent {
     private String stationIdentity;
     private String model;
     private String firmwareVersion;
-    private Instant receivedAt;
+    private OffsetDateTime receivedAt;
 }

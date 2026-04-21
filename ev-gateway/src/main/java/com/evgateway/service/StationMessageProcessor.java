@@ -1,6 +1,7 @@
 package com.evgateway.service;
 
 import com.evgateway.messaging.StationBootReceivedEvent;
+import com.evgateway.messaging.StationHeartbeatReceivedEvent;
 import com.evgateway.messaging.publisher.StationEventPublisher;
 import com.evgateway.websocket.dto.BootNotificationResponse;
 import com.evgateway.websocket.dto.HeartbeatResponse;
@@ -15,6 +16,7 @@ import com.evgateway.model.ConnectorStatus;
 import com.evgateway.websocket.dto.StatusNotificationResponse;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 
 @Service
 public class StationMessageProcessor {
@@ -22,15 +24,12 @@ public class StationMessageProcessor {
 
     private final ObjectMapper objectMapper;
     private final StationRegistryService stationRegistryService;
-    private final StationBackendClient stationBackendClient;
     private final StationEventPublisher stationEventPublisher;
 
     public StationMessageProcessor(StationRegistryService stationRegistryService,
-                                   StationBackendClient stationBackendClient,
                                    StationEventPublisher stationEventPublisher) {
         this.objectMapper = new ObjectMapper();
         this.stationRegistryService = stationRegistryService;
-        this.stationBackendClient = stationBackendClient;
         this.stationEventPublisher = stationEventPublisher;
     }
 
@@ -71,7 +70,7 @@ public class StationMessageProcessor {
                     message.getStationIdentity(),
                     message.getModel(),
                     message.getFirmwareVersion(),
-                    Instant.now()
+                    OffsetDateTime.now()
             );
 
             stationEventPublisher.publishBootNotification(event);
@@ -106,27 +105,36 @@ public class StationMessageProcessor {
         }
     }
 
-    private void handleHeartbeat(WebSocketSession session, StationMessage message) throws Exception {
+    private void handleHeartbeat(WebSocketSession session, StationMessage message) {
         log.info("heartbeat received");
         log.info("stationIdentity = {}", message.getStationIdentity());
 
-        boolean updated = stationRegistryService.updateHeartbeat(message.getStationIdentity());
-
-        if (!updated) {
-            log.warn("heartbeat received for unknown station: {}", message.getStationIdentity());
+        if (message.getStationIdentity() == null || message.getStationIdentity().isBlank()) {
+            log.warn("HEARTBEAT without stationIdentity");
             return;
         }
 
-        HeartbeatResponse response = new HeartbeatResponse(
-                "HEARTBEAT_RESPONSE",
-                Instant.now().toString()
-        );
+        try {
+            StationHeartbeatReceivedEvent event = new StationHeartbeatReceivedEvent(
+                    message.getStationIdentity(),
+                    OffsetDateTime.now()
+            );
 
-        String jsonResponse = objectMapper.writeValueAsString(response);
-        session.sendMessage(new TextMessage(jsonResponse));
+            stationEventPublisher.publishHeartbeatNotification(event);
 
-        log.info("heartbeat response sent");
-        log.info("response = {}", jsonResponse);
+            HeartbeatResponse response = new HeartbeatResponse(
+                    "HEARTBEAT_RESPONSE",
+                    Instant.now().toString()
+            );
+
+            String jsonResponse = objectMapper.writeValueAsString(response);
+            session.sendMessage(new TextMessage(jsonResponse));
+
+            log.info("heartbeat notification published to RabbitMQ and response sent");
+            log.info("response = {}", jsonResponse);
+        } catch (Exception e) {
+            log.error("Failed to publish heartbeat notification to RabbitMQ", e);
+        }
     }
 
     private void handleStatusNotification(WebSocketSession session, StationMessage message) throws Exception {

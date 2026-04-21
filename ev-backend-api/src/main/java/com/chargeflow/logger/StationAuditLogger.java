@@ -53,6 +53,18 @@ public class StationAuditLogger {
                 ocppIdentity
         );
     }
+    public void heartbeatNotificationFailure(String ocppIdentity, String reason) {
+        LOGGER.warn("STATION_HEARTBEAT_NOTIFICATION_FAILURE ocppIdentity={} reason={}", ocppIdentity, reason);
+    }
+
+    public void heartbeatNotificationSuccess(Long stationId, String stationCode, String ocppIdentity) {
+        LOGGER.info(
+                "STATION_HEARTBEAT_NOTIFICATION_SUCCESS stationId={} stationCode={} ocppIdentity={}",
+                stationId,
+                stationCode,
+                ocppIdentity
+        );
+    }
 
     public void unexpectedError(String action, String reference, Exception ex) {
         LOGGER.error("STATION_UNEXPECTED_ERROR action={} reference={} message={}", action, reference, ex.getMessage(), ex);

@@ -4,6 +4,7 @@ import com.chargeflow.common.exception.ConflictException;
 import com.chargeflow.common.exception.NotFoundException;
 import com.chargeflow.logger.StationAuditLogger;
 import com.chargeflow.messaging.StationBootReceivedEvent;
+import com.chargeflow.messaging.StationHeartbeatReceivedEvent;
 import com.chargeflow.station.dto.CreateStationRequest;
 import com.chargeflow.station.dto.StationResponse;
 import com.chargeflow.station.dto.UpdateStationRequest;
@@ -17,8 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 
 @Service
 @RequiredArgsConstructor
@@ -53,13 +52,31 @@ public class StationServiceImpl implements StationService {
         Station station = optionalStation.get();
         station.setModel(event.getModel());
         station.setFirmwareVersion(event.getFirmwareVersion());
-        station.setLastSeenAt(event.getReceivedAt() != null
-                ? OffsetDateTime.ofInstant(event.getReceivedAt(), ZoneOffset.UTC)
-                : null);
+        station.setLastSeenAt(event.getReceivedAt());
         station.setStatus(StationStatus.AVAILABLE);
 
         Station savedStation = stationRepository.save(station);
         stationAuditLogger.bootNotificationSuccess(
+                savedStation.getId(),
+                savedStation.getStationCode(),
+                savedStation.getOcppIdentity()
+        );
+    }
+
+    @Transactional
+    public void handleHeartbeatNotification(StationHeartbeatReceivedEvent event) {
+        Optional<Station> optionalStation =
+                stationRepository.findByOcppIdentity(event.getStationIdentity());
+
+        if (optionalStation.isEmpty()) {
+            stationAuditLogger.heartbeatNotificationFailure(event.getStationIdentity(), "Station not found");
+            return;
+        }
+
+        Station station = optionalStation.get();
+        station.setLastSeenAt(event.getReceivedAt());
+        Station savedStation = stationRepository.save(station);
+        stationAuditLogger.heartbeatNotificationSuccess(
                 savedStation.getId(),
                 savedStation.getStationCode(),
                 savedStation.getOcppIdentity()

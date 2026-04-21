@@ -11,9 +11,7 @@ import java.time.OffsetDateTime;
 @NoArgsConstructor
 @Setter
 @Getter
-public class StationBootReceivedEvent {
+public class StationHeartbeatReceivedEvent {
     private String stationIdentity;
-    private String model;
-    private String firmwareVersion;
     private OffsetDateTime receivedAt;
 }

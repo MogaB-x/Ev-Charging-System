@@ -15,7 +15,9 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMqConfig {
     public static final String EV_EVENTS_EXCHANGE = "ev.events";
     public static final String CORE_STATION_BOOT_QUEUE = "core.station.boot.queue";
+    public static final String CORE_STATION_HEARTBEAT_QUEUE = "core.station.heartbeat.queue";
     public static final String STATION_BOOT_ROUTING_KEY = "station.boot";
+    public static final String STATION_HEARTBEAT_ROUTING_KEY = "station.heartbeat";
 
     @Bean
     public DirectExchange evEventsExchange() {
@@ -28,11 +30,24 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    public Queue coreStationHeartbeatQueue() {
+        return new Queue(CORE_STATION_HEARTBEAT_QUEUE, true);
+    }
+
+    @Bean
     public Binding stationBootBinding(Queue coreStationBootQueue, DirectExchange evEventsExchange) {
         return BindingBuilder
                 .bind(coreStationBootQueue)
                 .to(evEventsExchange)
                 .with(STATION_BOOT_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding stationHeartbeatBinding(Queue coreStationHeartbeatQueue, DirectExchange evEventsExchange) {
+        return BindingBuilder
+                .bind(coreStationHeartbeatQueue)
+                .to(evEventsExchange)
+                .with(STATION_HEARTBEAT_ROUTING_KEY);
     }
 
     @Bean
