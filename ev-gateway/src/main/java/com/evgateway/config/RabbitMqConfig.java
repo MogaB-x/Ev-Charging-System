@@ -10,6 +10,7 @@ public class RabbitMqConfig {
     public static final String EV_EVENTS_EXCHANGE = "ev.events";
     public static final String STATION_BOOT_ROUTING_KEY = "station.boot";
     public static final String STATION_HEARTBEAT_ROUTING_KEY = "station.heartbeat";
+    public static final String CONNECTOR_STATUS_ROUTING_KEY = "connector.status";
 
     @Bean
     public DirectExchange evEventsExchange(){

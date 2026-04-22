@@ -15,4 +15,6 @@ public interface ConnectorRepository extends JpaRepository<Connector, Long> {
     Optional<Connector> findByStationIdAndConnectorNumber(Long stationId, Integer connectorNumber);
 
     boolean existsByStationIdAndConnectorNumber(Long stationId, Integer connectorNumber);
+
+    Optional<Connector> findByStationOcppIdentityAndConnectorNumber(String ocppIdentity, Integer connectorNumber);
 }

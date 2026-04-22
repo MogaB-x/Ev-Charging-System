@@ -27,4 +27,12 @@ public class StationEventPublisher {
                 event
         );
     }
+
+    public void publishConnectorNotification(Object event) {
+        rabbitTemplate.convertAndSend(
+                RabbitMqConfig.EV_EVENTS_EXCHANGE,
+                RabbitMqConfig.CONNECTOR_STATUS_ROUTING_KEY,
+                event
+        );
+    }
 }

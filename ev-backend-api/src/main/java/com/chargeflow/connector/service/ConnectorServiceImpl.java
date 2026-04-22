@@ -10,6 +10,7 @@ import com.chargeflow.connector.entity.ConnectorStatus;
 import com.chargeflow.connector.mapper.ConnectorMapper;
 import com.chargeflow.connector.repository.ConnectorRepository;
 import com.chargeflow.logger.ConnectorAuditLogger;
+import com.chargeflow.messaging.ConnectorStatusReceivedEvent;
 import com.chargeflow.station.entity.Station;
 import com.chargeflow.station.repository.StationRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 @Service
@@ -27,6 +29,70 @@ public class ConnectorServiceImpl implements ConnectorService {
     private final ConnectorRepository connectorRepository;
     private final StationRepository stationRepository;
     private final ConnectorAuditLogger connectorAuditLogger;
+
+    @Transactional
+    public void handleConnectorStatus(ConnectorStatusReceivedEvent event){
+        try {
+            Optional<Station> optionalStation =
+                    stationRepository.findByOcppIdentity(event.getStationIdentity());
+
+            if (optionalStation.isEmpty()) {
+                connectorAuditLogger.connectorStatusFailure(
+                        event.getStationIdentity(),
+                        event.getConnectorNumber(),
+                        event.getStatus(),
+                        "Station not found"
+                );
+                return;
+            }
+
+            Station station = optionalStation.get();
+
+            Optional<Connector> optionalConnector =
+                    connectorRepository.findByStationIdAndConnectorNumber(
+                            station.getId(),
+                            event.getConnectorNumber()
+                    );
+
+            if (optionalConnector.isEmpty()) {
+                connectorAuditLogger.connectorStatusFailure(
+                        event.getStationIdentity(),
+                        event.getConnectorNumber(),
+                        event.getStatus(),
+                        "Connector not found"
+                );
+                return;
+            }
+
+            Connector connector = optionalConnector.get();
+            ConnectorStatus newStatus = ConnectorStatus.valueOf(event.getStatus());
+
+            connector.setConnectorStatus(newStatus);
+            Connector savedConnector = connectorRepository.save(connector);
+
+            connectorAuditLogger.connectorStatusSuccess(
+                    savedConnector.getId(),
+                    savedConnector.getStation().getId(),
+                    savedConnector.getConnectorNumber(),
+                    savedConnector.getConnectorStatus().name()
+            );
+        } catch (IllegalArgumentException ex) {
+            connectorAuditLogger.connectorStatusFailure(
+                    event.getStationIdentity(),
+                    event.getConnectorNumber(),
+                    event.getStatus(),
+                    "Invalid connector status"
+            );
+            throw ex;
+        } catch (Exception ex) {
+            connectorAuditLogger.unexpectedError(
+                    "handleConnectorStatus",
+                    event.getStationIdentity() + ":" + event.getConnectorNumber(),
+                    ex
+            );
+            throw ex;
+        }
+    }
 
     @Override
     public List<ConnectorResponse> getConnectorsByStation(Long stationId) {

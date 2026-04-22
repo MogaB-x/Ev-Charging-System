@@ -3,6 +3,8 @@ package com.chargeflow.connector.service;
 import com.chargeflow.connector.dto.ConnectorResponse;
 import com.chargeflow.connector.dto.CreateConnectorRequest;
 import com.chargeflow.connector.dto.UpdateConnectorRequest;
+import com.chargeflow.messaging.ConnectorStatusReceivedEvent;
+import com.chargeflow.messaging.StationBootReceivedEvent;
 
 import java.util.List;
 
@@ -16,4 +18,6 @@ public interface ConnectorService {
     ConnectorResponse createConnector(CreateConnectorRequest request);
 
     ConnectorResponse updateConnector(Long connectorId, UpdateConnectorRequest request);
+
+    void handleConnectorStatus(ConnectorStatusReceivedEvent event);
 }

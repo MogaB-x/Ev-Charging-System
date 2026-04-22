@@ -1,5 +1,6 @@
 package com.evgateway.service;
 
+import com.evgateway.messaging.ConnectorStatusReceivedEvent;
 import com.evgateway.messaging.StationBootReceivedEvent;
 import com.evgateway.messaging.StationHeartbeatReceivedEvent;
 import com.evgateway.messaging.publisher.StationEventPublisher;
@@ -149,30 +150,20 @@ public class StationMessageProcessor {
             return;
         }
 
-        ConnectorStatus newStatus;
-
         try {
-            newStatus = ConnectorStatus.valueOf(message.getStatus());
+            ConnectorStatus.valueOf(message.getStatus());
         } catch (IllegalArgumentException e) {
             log.warn("unknown connector status: {}", message.getStatus());
             return;
         }
 
-        ConnectorStatus oldStatus = stationRegistryService.updateConnectorStatus(
+        ConnectorStatusReceivedEvent event = new ConnectorStatusReceivedEvent(
                 message.getStationIdentity(),
                 message.getConnectorNumber(),
-                newStatus
+                message.getStatus(),
+                OffsetDateTime.now()
         );
-
-        if (oldStatus == null) {
-            log.warn("station not found or first status set: station={}", message.getStationIdentity());
-        } else {
-            log.info("Connector status updated: station={}, connector={}, from={}, to={}",
-                    message.getStationIdentity(),
-                    message.getConnectorNumber(),
-                    oldStatus,
-                    newStatus);
-        }
+        stationEventPublisher.publishConnectorNotification(event);
 
         StatusNotificationResponse response = new StatusNotificationResponse(
                 "STATUS_NOTIFICATION_RESPONSE",
@@ -181,6 +172,8 @@ public class StationMessageProcessor {
 
         String jsonResponse = objectMapper.writeValueAsString(response);
         session.sendMessage(new TextMessage(jsonResponse));
+
+        log.info("connector status published to RabbitMQ");
     }
 
 }

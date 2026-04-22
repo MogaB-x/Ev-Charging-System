@@ -57,6 +57,36 @@ public class ConnectorAuditLogger {
         LOGGER.warn("CONNECTOR_FETCH_BY_STATION_FAILURE stationId={} reason={}", stationId, reason);
     }
 
+    public void connectorStatusFailure(
+            String ocppIdentity,
+            Integer connectorNumber,
+            String status,
+            String reason
+    ) {
+        LOGGER.warn(
+                "CONNECTOR_STATUS_NOTIFICATION_FAILURE ocppIdentity={} connectorNumber={} status={} reason={}"
+                , ocppIdentity,
+                connectorNumber,
+                status,
+                reason
+        );
+    }
+
+    public void connectorStatusSuccess(
+            Long connectorId,
+            Long stationId,
+            Integer connectorNumber,
+            String status
+    ) {
+        LOGGER.info(
+                "CONNECTOR_STATUS_NOTIFICATION_SUCCESS connectorId={} stationId={} connectorNumber={} status={}",
+                connectorId,
+                stationId,
+                connectorNumber,
+                status
+        );
+    }
+
     public void unexpectedError(String action, String reference, Exception ex) {
         LOGGER.error(
                 "CONNECTOR_UNEXPECTED_ERROR action={} reference={} message={}",
