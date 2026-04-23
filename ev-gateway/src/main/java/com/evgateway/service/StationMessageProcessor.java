@@ -1,40 +1,41 @@
 package com.evgateway.service;
 
 import com.evgateway.messaging.ConnectorStatusReceivedEvent;
+import com.evgateway.messaging.RemoteStartResultEvent;
 import com.evgateway.messaging.StationBootReceivedEvent;
 import com.evgateway.messaging.StationHeartbeatReceivedEvent;
+import com.evgateway.messaging.publisher.RemoteStartResultPublisher;
 import com.evgateway.messaging.publisher.StationEventPublisher;
+import com.evgateway.model.ConnectorStatus;
 import com.evgateway.websocket.dto.BootNotificationResponse;
 import com.evgateway.websocket.dto.HeartbeatResponse;
 import com.evgateway.websocket.dto.StationMessage;
+import com.evgateway.websocket.dto.StatusNotificationResponse;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.ObjectMapper;
-import com.evgateway.model.ConnectorStatus;
-import com.evgateway.websocket.dto.StatusNotificationResponse;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
 
 @Service
+@RequiredArgsConstructor
 public class StationMessageProcessor {
     private static final Logger log = LoggerFactory.getLogger(StationMessageProcessor.class);
 
     private final ObjectMapper objectMapper;
     private final StationRegistryService stationRegistryService;
+    private final RemoteStartResultPublisher remoteStartResultPublisher;
     private final StationEventPublisher stationEventPublisher;
 
-    public StationMessageProcessor(StationRegistryService stationRegistryService,
-                                   StationEventPublisher stationEventPublisher) {
-        this.objectMapper = new ObjectMapper();
-        this.stationRegistryService = stationRegistryService;
-        this.stationEventPublisher = stationEventPublisher;
-    }
 
     public void process(WebSocketSession session, String payload) throws Exception {
+        log.info("Incoming WS payload: {}", payload);
+
         StationMessage message = objectMapper.readValue(payload, StationMessage.class);
 
         if (message.getType() == null) {
@@ -45,9 +46,48 @@ public class StationMessageProcessor {
         switch (message.getType()) {
             case "BOOT_NOTIFICATION" -> handleBootNotification(session, message);
             case "HEARTBEAT" -> handleHeartbeat(session, message);
-            case "STATUS_NOTIFICATION" -> handleStatusNotification(session, message);
+            case "REMOTE_START_RESPONSE" -> handleRemoteStartResponse(message);
+            case "CONNECTOR_STATUS" -> handleStatusNotification(session, message);
             default -> log.warn("unknown message type received: {}", message.getType());
         }
+    }
+
+    private void handleRemoteStartResponse(StationMessage message) {
+        if (message.getSessionId() == null
+                || message.getSessionCode() == null
+                || message.getStationIdentity() == null
+                || message.getConnectorNumber() == null
+                || message.getResult() == null) {
+            log.warn("Invalid REMOTE_START_RESPONSE payload");
+            return;
+        }
+        if (!"ACCEPTED".equals(message.getResult()) && !"REJECTED".equals(message.getResult())) {
+            log.warn("Invalid REMOTE_START_RESPONSE result: {}", message.getResult());
+            return;
+        }
+
+        log.info("REMOTE_START_RESPONSE received: sessionId={}, sessionCode={}, station={}, connector={}, result={}",
+                message.getSessionId(),
+                message.getSessionCode(),
+                message.getStationIdentity(),
+                message.getConnectorNumber(),
+                message.getResult());
+
+        RemoteStartResultEvent event = new RemoteStartResultEvent(
+                message.getSessionId(),
+                message.getSessionCode(),
+                message.getStationIdentity(),
+                message.getConnectorNumber(),
+                message.getResult(),
+                message.getReason(),
+                OffsetDateTime.now()
+        );
+
+        remoteStartResultPublisher.publishRemoteStartResponse(event);
+
+        log.info("REMOTE_START_RESULT sent to station {} for session {}",
+                message.getStationIdentity(),
+                message.getSessionId());
     }
 
     private void handleBootNotification(WebSocketSession session, StationMessage message) throws Exception {
@@ -112,6 +152,13 @@ public class StationMessageProcessor {
 
         if (message.getStationIdentity() == null || message.getStationIdentity().isBlank()) {
             log.warn("HEARTBEAT without stationIdentity");
+            return;
+        }
+
+        boolean updated = stationRegistryService.updateHeartbeat(message.getStationIdentity());
+
+        if (!updated) {
+            log.warn("heartbeat received for unknown station: {}", message.getStationIdentity());
             return;
         }
 

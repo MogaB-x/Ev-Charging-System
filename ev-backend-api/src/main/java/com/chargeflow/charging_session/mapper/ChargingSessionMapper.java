@@ -7,7 +7,6 @@ import com.chargeflow.connector.entity.Connector;
 import com.chargeflow.station.entity.Station;
 import com.chargeflow.user.entity.User;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public final class ChargingSessionMapper {
@@ -19,8 +18,8 @@ public final class ChargingSessionMapper {
         session.setUser(user);
         session.setStation(station);
         session.setConnector(connector);
-        session.setStatus(ChargingStatus.IN_PROGRESS);
-        session.setStartedAt(OffsetDateTime.now());
+        session.setStatus(ChargingStatus.PENDING);
+        session.setStartedAt(null);
         session.setPricePerKwh(connector.getPricePerKw());
         return session;
     }

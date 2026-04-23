@@ -5,6 +5,7 @@ import com.chargeflow.charging_session.dto.StartSessionRequest;
 import com.chargeflow.charging_session.service.ChargingSessionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,7 @@ public class ChargingSessionController {
     private final ChargingSessionService service;
 
     @PostMapping("/start")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public ChargingSessionResponse startSession(
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody StartSessionRequest request

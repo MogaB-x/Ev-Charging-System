@@ -50,6 +50,11 @@ public class StationRegistryService {
         return stationsByIdentity.get(stationIdentity);
     }
 
+    public WebSocketSession getSession(String stationIdentity) {
+        ConnectedStation station = findByStationIdentity(stationIdentity);
+        return station != null ? station.getSession() : null;
+    }
+
     public Collection<ConnectedStation> getAll() {
         return stationsByIdentity.values();
     }

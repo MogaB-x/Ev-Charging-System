@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS charging_sessions (
 
 	status charging_status NOT NULL,
 
-	started_at TIMESTAMPTZ NOT NULL,
+	started_at TIMESTAMPTZ,
 	ended_at TIMESTAMPTZ,
 
 	meter_start_wh BIGINT,

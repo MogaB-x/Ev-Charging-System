@@ -2,6 +2,8 @@ package com.chargeflow.charging_session.service;
 
 import com.chargeflow.charging_session.calculator.ChargingSessionCalculator;
 import com.chargeflow.charging_session.dto.ChargingSessionResponse;
+import com.chargeflow.charging_session.dto.RemoteStartCommand;
+import com.chargeflow.charging_session.dto.RemoteStartResultEvent;
 import com.chargeflow.charging_session.dto.StartSessionRequest;
 import com.chargeflow.charging_session.entity.ChargingSession;
 import com.chargeflow.charging_session.entity.ChargingStatus;
@@ -12,13 +14,17 @@ import com.chargeflow.common.exception.NotFoundException;
 import com.chargeflow.connector.entity.Connector;
 import com.chargeflow.connector.entity.ConnectorStatus;
 import com.chargeflow.connector.repository.ConnectorRepository;
+import com.chargeflow.logger.ChargingSessionAuditLogger;
+import com.chargeflow.messaging.RemoteStartCommandPublisher;
 import com.chargeflow.station.entity.Station;
+import com.chargeflow.station.entity.StationStatus;
 import com.chargeflow.station.repository.StationRepository;
 import com.chargeflow.user.entity.User;
 import com.chargeflow.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -34,6 +40,10 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
     private final StationRepository stationRepository;
     private final ConnectorRepository connectorRepository;
     private final UserRepository userRepository;
+    private final RemoteStartCommandPublisher remoteStartCommandPublisher;
+    private final ChargingSessionAuditLogger chargingSessionAuditLogger;
+    private static final EnumSet<ChargingStatus> ACTIVE_STATUSES =
+            EnumSet.of(ChargingStatus.PENDING, ChargingStatus.IN_PROGRESS);
     private static final EnumSet<ChargingStatus> TERMINAL_STATUSES =
             EnumSet.of(ChargingStatus.COMPLETED, ChargingStatus.FAILED, ChargingStatus.CANCELLED);
     private final ChargingSessionCalculator chargingSessionCalculator;
@@ -54,27 +64,56 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
             throw new ConflictException("Connector does not belong to station");
         }
 
+        validateStationIsKnownAndOnline(station);
+
         if (connector.getConnectorStatus() != ConnectorStatus.AVAILABLE) {
             throw new ConflictException("Connector not available");
         }
 
-        if (sessionRepository.existsByUserEmailAndStatus(userEmail, ChargingStatus.IN_PROGRESS)) {
+        if (sessionRepository.existsByUserEmailAndStatusIn(userEmail, ACTIVE_STATUSES)) {
             throw new ConflictException("User already has an active session");
         }
 
-        //balance
         if (user.getBalance().compareTo(BigDecimal.valueOf(10)) < 0) {
-            // -- add money --  this would be a separate flow with payment processing
             user.setBalance(user.getBalance().add(BigDecimal.valueOf(50)));
         }
 
         ChargingSession session = ChargingSessionMapper.toEntity(user, station, connector);
-
-        connector.setConnectorStatus(ConnectorStatus.CHARGING);
+        connector.setConnectorStatus(ConnectorStatus.PREPARING);
 
         ChargingSession saved = sessionRepository.save(session);
 
+        remoteStartCommandPublisher.publish(buildRemoteStartCommand(saved));
+
         return ChargingSessionMapper.toResponse(saved);
+    }
+
+    @Transactional
+    public void handleRemoteStartResult(RemoteStartResultEvent event) {
+        chargingSessionAuditLogger.remoteStartResultReceived(event.getSessionId(), event.getResult());
+        ChargingSession session = sessionRepository.findById(event.getSessionId())
+                .orElseThrow(() -> new NotFoundException("Session not found"));
+
+        if (session.getStatus() != ChargingStatus.PENDING) {
+            return;
+        }
+
+        if ("REJECTED".equals(event.getResult())) {
+            chargingSessionAuditLogger.remoteStartRejected(event.getSessionId(), event.getReason());
+            session.setStatus(ChargingStatus.FAILED);
+            session.setStopReason(event.getReason());
+
+            Connector connector = session.getConnector();
+            connector.setConnectorStatus(ConnectorStatus.AVAILABLE);
+
+            sessionRepository.save(session);
+            return;
+        }
+
+        if ("ACCEPTED".equals(event.getResult())) {
+            chargingSessionAuditLogger.remoteStartAccepted(event.getSessionId());
+            sessionRepository.save(session);
+        }
     }
 
     @Override
@@ -165,5 +204,25 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
         if (requestedStatus == ChargingStatus.PENDING) {
             throw new ConflictException("Charging session status cannot transition back to PENDING");
         }
+    }
+
+    private void validateStationIsKnownAndOnline(Station station) {
+        if (!StringUtils.hasText(station.getOcppIdentity())) {
+            throw new ConflictException("Station is not known by the charging gateway");
+        }
+
+        if (station.getLastSeenAt() == null || station.getStatus() != StationStatus.AVAILABLE) {
+            throw new ConflictException("Station is offline");
+        }
+    }
+
+    private RemoteStartCommand buildRemoteStartCommand(ChargingSession session) {
+        return new RemoteStartCommand(
+                session.getId(),
+                session.getSessionCode(),
+                session.getStation().getOcppIdentity(),
+                session.getConnector().getConnectorNumber(),
+                session.getCreatedAt()
+        );
     }
 }

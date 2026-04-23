@@ -14,16 +14,30 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMqConfig {
     public static final String EV_EVENTS_EXCHANGE = "ev.events";
+    public static final String EV_COMMANDS_EXCHANGE = "ev.commands";
+
     public static final String CORE_STATION_BOOT_QUEUE = "core.station.boot.queue";
     public static final String CORE_STATION_HEARTBEAT_QUEUE = "core.station.heartbeat.queue";
     public static final String CORE_CONNECTOR_STATUS_QUEUE = "core.connector.status.queue";
+    public static final String GATEWAY_REMOTE_START_QUEUE = "gateway.remote_start.queue";
+    public static final String CORE_REMOTE_START_RESULT_QUEUE = "core.remote_start_result.queue";
+
     public static final String STATION_BOOT_ROUTING_KEY = "station.boot";
     public static final String STATION_HEARTBEAT_ROUTING_KEY = "station.heartbeat";
     public static final String CONNECTOR_STATUS_ROUTING_KEY = "connector.status";
+    public static final String CHARGING_REMOTE_START_ROUTING_KEY = "charging.remote_start";
+    public static final String CHARGING_REMOTE_START_RESULT_ROUTING_KEY = "charging.remote_start.result";
+
+
 
     @Bean
     public DirectExchange evEventsExchange() {
         return new DirectExchange(EV_EVENTS_EXCHANGE);
+    }
+
+    @Bean
+    public DirectExchange evCommandsExchange() {
+        return new DirectExchange(EV_COMMANDS_EXCHANGE);
     }
 
     @Bean
@@ -38,6 +52,14 @@ public class RabbitMqConfig {
 
     @Bean
     public Queue coreConnectorStatusQueue() {return new Queue(CORE_CONNECTOR_STATUS_QUEUE, true);}
+
+    @Bean
+    public Queue coreRemoteStartResultQueue() {return new Queue(CORE_REMOTE_START_RESULT_QUEUE, true);}
+
+    @Bean
+    public Queue gatewayRemoteStartQueue() {
+        return new Queue(GATEWAY_REMOTE_START_QUEUE, true);
+    }
 
     @Bean
     public Binding stationBootBinding(Queue coreStationBootQueue, DirectExchange evEventsExchange) {
@@ -61,6 +83,23 @@ public class RabbitMqConfig {
                 .bind(coreConnectorStatusQueue)
                 .to(evEventsExchange)
                 .with(CONNECTOR_STATUS_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding remoteStartBinding(Queue gatewayRemoteStartQueue, DirectExchange evCommandsExchange) {
+        return BindingBuilder
+                .bind(gatewayRemoteStartQueue)
+                .to(evCommandsExchange)
+                .with(CHARGING_REMOTE_START_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding remoteStartResultBinding(Queue coreRemoteStartResultQueue,
+                                            DirectExchange evEventsExchange) {
+        return BindingBuilder
+                .bind(coreRemoteStartResultQueue)
+                .to(evEventsExchange)
+                .with(CHARGING_REMOTE_START_RESULT_ROUTING_KEY);
     }
 
     @Bean
