@@ -1,8 +1,8 @@
 package com.evgateway.messaging.publisher;
 
-import com.evgateway.config.RabbitMqConfig;
-import com.evgateway.messaging.StationBootReceivedEvent;
-import com.evgateway.messaging.StationHeartbeatReceivedEvent;
+import com.evgateway.messaging.config.RabbitMqConfig;
+import com.evgateway.messaging.contract.event.StationBootReceivedEvent;
+import com.evgateway.messaging.contract.event.StationHeartbeatReceivedEvent;
 import lombok.AllArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;

@@ -2,7 +2,7 @@ package com.chargeflow.charging_session.service;
 
 import com.chargeflow.charging_session.calculator.ChargingSessionCalculator;
 import com.chargeflow.charging_session.dto.ChargingSessionResponse;
-import com.chargeflow.charging_session.dto.RemoteStartCommand;
+import com.chargeflow.messaging.contract.command.RemoteStartCommand;
 import com.chargeflow.charging_session.dto.RemoteStartResultEvent;
 import com.chargeflow.charging_session.dto.StartSessionRequest;
 import com.chargeflow.charging_session.entity.ChargingSession;

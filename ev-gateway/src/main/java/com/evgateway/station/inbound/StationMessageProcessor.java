@@ -1,12 +1,13 @@
-package com.evgateway.service;
+package com.evgateway.station.inbound;
 
-import com.evgateway.messaging.ConnectorStatusReceivedEvent;
-import com.evgateway.messaging.RemoteStartResultEvent;
-import com.evgateway.messaging.StationBootReceivedEvent;
-import com.evgateway.messaging.StationHeartbeatReceivedEvent;
+import com.evgateway.messaging.contract.event.ConnectorStatusReceivedEvent;
+import com.evgateway.messaging.contract.event.RemoteStartResultEvent;
+import com.evgateway.messaging.contract.event.StationBootReceivedEvent;
+import com.evgateway.messaging.contract.event.StationHeartbeatReceivedEvent;
 import com.evgateway.messaging.publisher.RemoteStartResultPublisher;
 import com.evgateway.messaging.publisher.StationEventPublisher;
 import com.evgateway.model.ConnectorStatus;
+import com.evgateway.station.registry.StationRegistryService;
 import com.evgateway.websocket.dto.BootNotificationResponse;
 import com.evgateway.websocket.dto.HeartbeatResponse;
 import com.evgateway.websocket.dto.StationMessage;
@@ -34,7 +35,6 @@ public class StationMessageProcessor {
 
 
     public void process(WebSocketSession session, String payload) throws Exception {
-        log.info("Incoming WS payload: {}", payload);
 
         StationMessage message = objectMapper.readValue(payload, StationMessage.class);
 

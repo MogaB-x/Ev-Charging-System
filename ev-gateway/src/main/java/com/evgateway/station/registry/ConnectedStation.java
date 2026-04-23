@@ -1,5 +1,6 @@
-package com.evgateway.model;
+package com.evgateway.station.registry;
 
+import com.evgateway.model.ConnectorStatus;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.web.socket.WebSocketSession;

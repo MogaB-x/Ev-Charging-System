@@ -1,4 +1,4 @@
-package com.evgateway.config;
+package com.evgateway.messaging.config;
 
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;

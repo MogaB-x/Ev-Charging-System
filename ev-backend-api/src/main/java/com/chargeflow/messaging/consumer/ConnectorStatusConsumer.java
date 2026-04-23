@@ -1,8 +1,8 @@
 package com.chargeflow.messaging.consumer;
 
-import com.chargeflow.common.config.RabbitMqConfig;
+import com.chargeflow.messaging.config.RabbitMqConfig;
 import com.chargeflow.connector.service.ConnectorService;
-import com.chargeflow.messaging.ConnectorStatusReceivedEvent;
+import com.chargeflow.messaging.contract.event.ConnectorStatusReceivedEvent;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 

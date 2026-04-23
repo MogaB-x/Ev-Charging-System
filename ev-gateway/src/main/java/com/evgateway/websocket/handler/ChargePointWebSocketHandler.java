@@ -1,8 +1,8 @@
-package com.evgateway.websocket;
+package com.evgateway.websocket.handler;
 
-import com.evgateway.model.ConnectedStation;
-import com.evgateway.service.StationMessageProcessor;
-import com.evgateway.service.StationRegistryService;
+import com.evgateway.station.inbound.StationMessageProcessor;
+import com.evgateway.station.registry.ConnectedStation;
+import com.evgateway.station.registry.StationRegistryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

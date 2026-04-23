@@ -1,6 +1,5 @@
-package com.evgateway.service;
+package com.evgateway.station.registry;
 
-import com.evgateway.model.ConnectedStation;
 import com.evgateway.model.ConnectorStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.WebSocketSession;

@@ -1,7 +1,7 @@
 package com.evgateway.messaging.publisher;
 
-import com.evgateway.config.RabbitMqConfig;
-import com.evgateway.messaging.RemoteStartResultEvent;
+import com.evgateway.messaging.config.RabbitMqConfig;
+import com.evgateway.messaging.contract.event.RemoteStartResultEvent;
 import lombok.AllArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;

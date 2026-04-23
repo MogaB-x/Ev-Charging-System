@@ -3,8 +3,7 @@ package com.chargeflow.connector.service;
 import com.chargeflow.connector.dto.ConnectorResponse;
 import com.chargeflow.connector.dto.CreateConnectorRequest;
 import com.chargeflow.connector.dto.UpdateConnectorRequest;
-import com.chargeflow.messaging.ConnectorStatusReceivedEvent;
-import com.chargeflow.messaging.StationBootReceivedEvent;
+import com.chargeflow.messaging.contract.event.ConnectorStatusReceivedEvent;
 
 import java.util.List;
 

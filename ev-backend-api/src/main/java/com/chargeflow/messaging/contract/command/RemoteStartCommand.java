@@ -1,4 +1,4 @@
-package com.chargeflow.charging_session.dto;
+package com.chargeflow.messaging.contract.command;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

@@ -1,4 +1,4 @@
-package com.evgateway.messaging;
+package com.evgateway.messaging.contract.event;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -9,9 +9,11 @@ import java.time.OffsetDateTime;
 
 @AllArgsConstructor
 @NoArgsConstructor
-@Setter
 @Getter
-public class StationHeartbeatReceivedEvent {
+@Setter
+public class ConnectorStatusReceivedEvent {
     private String stationIdentity;
+    private Integer connectorNumber;
+    private String status;
     private OffsetDateTime receivedAt;
 }

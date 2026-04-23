@@ -1,4 +1,4 @@
-package com.evgateway.messaging;
+package com.evgateway.messaging.contract.event;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

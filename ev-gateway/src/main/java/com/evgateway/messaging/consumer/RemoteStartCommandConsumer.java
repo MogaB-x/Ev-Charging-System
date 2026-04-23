@@ -1,9 +1,9 @@
 package com.evgateway.messaging.consumer;
 
-import com.evgateway.config.RabbitMqConfig;
-import com.evgateway.messaging.RemoteStartCommand;
+import com.evgateway.messaging.config.RabbitMqConfig;
+import com.evgateway.messaging.contract.command.RemoteStartCommand;
 import com.evgateway.messaging.publisher.RemoteStartResultPublisher;
-import com.evgateway.service.StationRegistryService;
+import com.evgateway.station.registry.StationRegistryService;
 import com.evgateway.websocket.dto.RemoteStartWsCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;

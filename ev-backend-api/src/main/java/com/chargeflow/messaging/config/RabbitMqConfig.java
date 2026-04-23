@@ -1,4 +1,4 @@
-package com.chargeflow.common.config;
+package com.chargeflow.messaging.config;
 
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;

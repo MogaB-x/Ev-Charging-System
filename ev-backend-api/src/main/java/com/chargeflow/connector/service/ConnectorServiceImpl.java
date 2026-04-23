@@ -10,7 +10,7 @@ import com.chargeflow.connector.entity.ConnectorStatus;
 import com.chargeflow.connector.mapper.ConnectorMapper;
 import com.chargeflow.connector.repository.ConnectorRepository;
 import com.chargeflow.logger.ConnectorAuditLogger;
-import com.chargeflow.messaging.ConnectorStatusReceivedEvent;
+import com.chargeflow.messaging.contract.event.ConnectorStatusReceivedEvent;
 import com.chargeflow.station.entity.Station;
 import com.chargeflow.station.repository.StationRepository;
 import lombok.RequiredArgsConstructor;

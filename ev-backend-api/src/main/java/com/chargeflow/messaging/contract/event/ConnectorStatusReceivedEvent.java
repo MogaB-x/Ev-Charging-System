@@ -1,4 +1,4 @@
-package com.evgateway.messaging;
+package com.chargeflow.messaging.contract.event;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -9,11 +9,11 @@ import java.time.OffsetDateTime;
 
 @AllArgsConstructor
 @NoArgsConstructor
-@Setter
 @Getter
-public class StationBootReceivedEvent {
+@Setter
+public class ConnectorStatusReceivedEvent {
     private String stationIdentity;
-    private String model;
-    private String firmwareVersion;
+    private Integer connectorNumber;
+    private String status;
     private OffsetDateTime receivedAt;
 }

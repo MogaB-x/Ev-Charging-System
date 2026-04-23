@@ -1,7 +1,7 @@
 package com.chargeflow.messaging;
 
-import com.chargeflow.charging_session.dto.RemoteStartCommand;
-import com.chargeflow.common.config.RabbitMqConfig;
+import com.chargeflow.messaging.contract.command.RemoteStartCommand;
+import com.chargeflow.messaging.config.RabbitMqConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;

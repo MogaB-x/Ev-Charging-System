@@ -2,7 +2,7 @@ package com.chargeflow.messaging.consumer;
 
 import com.chargeflow.charging_session.dto.RemoteStartResultEvent;
 import com.chargeflow.charging_session.service.ChargingSessionServiceImpl;
-import com.chargeflow.common.config.RabbitMqConfig;
+import com.chargeflow.messaging.config.RabbitMqConfig;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

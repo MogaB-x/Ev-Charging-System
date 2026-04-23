@@ -1,4 +1,4 @@
-package com.evgateway.messaging;
+package com.evgateway.messaging.contract.event;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -9,11 +9,11 @@ import java.time.OffsetDateTime;
 
 @AllArgsConstructor
 @NoArgsConstructor
-@Getter
 @Setter
-public class ConnectorStatusReceivedEvent {
+@Getter
+public class StationBootReceivedEvent {
     private String stationIdentity;
-    private Integer connectorNumber;
-    private String status;
+    private String model;
+    private String firmwareVersion;
     private OffsetDateTime receivedAt;
 }
