@@ -17,8 +17,8 @@ import com.chargeflow.connector.repository.ConnectorRepository;
 import com.chargeflow.logger.ChargingSessionAuditLogger;
 import com.chargeflow.messaging.RemoteStartCommandPublisher;
 import com.chargeflow.station.entity.Station;
-import com.chargeflow.station.entity.StationStatus;
 import com.chargeflow.station.repository.StationRepository;
+import com.chargeflow.station.service.StationAvailabilityValidator;
 import com.chargeflow.user.entity.User;
 import com.chargeflow.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +42,8 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
     private final UserRepository userRepository;
     private final RemoteStartCommandPublisher remoteStartCommandPublisher;
     private final ChargingSessionAuditLogger chargingSessionAuditLogger;
+    private final StationAvailabilityValidator stationAvailabilityValidator;
+
     private static final EnumSet<ChargingStatus> ACTIVE_STATUSES =
             EnumSet.of(ChargingStatus.PENDING, ChargingStatus.IN_PROGRESS);
     private static final EnumSet<ChargingStatus> TERMINAL_STATUSES =
@@ -64,7 +66,9 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
             throw new ConflictException("Connector does not belong to station");
         }
 
-        validateStationIsKnownAndOnline(station);
+        validateStationIsKnown(station);
+        stationAvailabilityValidator.validateStationIsOnline(station);
+        stationAvailabilityValidator.validateStationIsOperational(station);
 
         if (connector.getConnectorStatus() != ConnectorStatus.AVAILABLE) {
             throw new ConflictException("Connector not available");
@@ -206,13 +210,9 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
         }
     }
 
-    private void validateStationIsKnownAndOnline(Station station) {
+    private void validateStationIsKnown(Station station) {
         if (!StringUtils.hasText(station.getOcppIdentity())) {
             throw new ConflictException("Station is not known by the charging gateway");
-        }
-
-        if (station.getLastSeenAt() == null || station.getStatus() != StationStatus.AVAILABLE) {
-            throw new ConflictException("Station is offline");
         }
     }
 
