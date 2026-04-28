@@ -14,7 +14,7 @@ public class StationAvailabilityValidator {
 
     private final Duration presenceTimeout;
 
-    public StationAvailabilityValidator(@Value("${station.presence-timeout-seconds}") long presenceTimeoutSeconds) {
+    public StationAvailabilityValidator(@Value("${station.presence-timeout-seconds:180}") long presenceTimeoutSeconds) {
         this.presenceTimeout = Duration.ofSeconds(presenceTimeoutSeconds);
     }
 

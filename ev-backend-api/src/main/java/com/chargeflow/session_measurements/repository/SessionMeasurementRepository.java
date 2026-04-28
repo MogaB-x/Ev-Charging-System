@@ -1,6 +1,6 @@
-package com.chargeflow.session_mesurements.repository;
+package com.chargeflow.session_measurements.repository;
 
-import com.chargeflow.session_mesurements.entity.SessionMeasurement;
+import com.chargeflow.session_measurements.entity.SessionMeasurement;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

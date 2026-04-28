@@ -1,4 +1,4 @@
-package com.chargeflow.session_mesurements.dto;
+package com.chargeflow.session_measurements.dto;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;

@@ -1,18 +1,16 @@
-package com.chargeflow.session_mesurements.service;
+package com.chargeflow.session_measurements.service;
 
 import com.chargeflow.charging_session.calculator.ChargingSessionCalculator;
-import com.chargeflow.charging_session.dto.ChargingSessionResponse;
 import com.chargeflow.charging_session.entity.ChargingSession;
 import com.chargeflow.charging_session.entity.ChargingStatus;
 import com.chargeflow.charging_session.repository.ChargingSessionRepository;
-import com.chargeflow.charging_session.service.ChargingSessionService;
 import com.chargeflow.common.exception.ConflictException;
 import com.chargeflow.common.exception.NotFoundException;
-import com.chargeflow.session_mesurements.dto.CreateSessionMeasurementRequest;
-import com.chargeflow.session_mesurements.dto.SessionMeasurementResponse;
-import com.chargeflow.session_mesurements.entity.SessionMeasurement;
-import com.chargeflow.session_mesurements.mapper.SessionMeasurementMapper;
-import com.chargeflow.session_mesurements.repository.SessionMeasurementRepository;
+import com.chargeflow.session_measurements.dto.CreateSessionMeasurementRequest;
+import com.chargeflow.session_measurements.dto.SessionMeasurementResponse;
+import com.chargeflow.session_measurements.entity.SessionMeasurement;
+import com.chargeflow.session_measurements.mapper.SessionMeasurementMapper;
+import com.chargeflow.session_measurements.repository.SessionMeasurementRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +25,6 @@ public class SessionMeasurementServiceImpl implements SessionMeasurementService 
 
     private final SessionMeasurementRepository measurementRepository;
     private final ChargingSessionRepository chargingSessionRepository;
-    private final ChargingSessionService chargingSessionService;
     private final ChargingSessionCalculator chargingSessionCalculator;
 
     @Override
@@ -69,13 +66,6 @@ public class SessionMeasurementServiceImpl implements SessionMeasurementService 
                 .map(SessionMeasurementMapper::toResponse)
                 .toList();
     }
-
-    @Override
-    public ChargingSessionResponse updateSessionStatus(Long sessionId, ChargingStatus status, String stopReason) {
-        //verificare tranzitie !
-        return chargingSessionService.finalizeSessionInternal(sessionId, status, stopReason);
-    }
-
 
     private void validateMeterValue(ChargingSession session, Long meterValueWh) {
         if (meterValueWh == null) {

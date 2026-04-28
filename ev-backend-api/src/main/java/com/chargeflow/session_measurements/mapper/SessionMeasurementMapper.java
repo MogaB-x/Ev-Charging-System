@@ -1,9 +1,9 @@
-package com.chargeflow.session_mesurements.mapper;
+package com.chargeflow.session_measurements.mapper;
 
 import com.chargeflow.charging_session.entity.ChargingSession;
-import com.chargeflow.session_mesurements.dto.CreateSessionMeasurementRequest;
-import com.chargeflow.session_mesurements.dto.SessionMeasurementResponse;
-import com.chargeflow.session_mesurements.entity.SessionMeasurement;
+import com.chargeflow.session_measurements.dto.CreateSessionMeasurementRequest;
+import com.chargeflow.session_measurements.dto.SessionMeasurementResponse;
+import com.chargeflow.session_measurements.entity.SessionMeasurement;
 
 import java.time.OffsetDateTime;
 

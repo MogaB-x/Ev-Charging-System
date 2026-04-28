@@ -1,4 +1,4 @@
-package com.chargeflow.session_mesurements.entity;
+package com.chargeflow.session_measurements.entity;
 
 import com.chargeflow.charging_session.entity.ChargingSession;
 import jakarta.persistence.Column;

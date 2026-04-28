@@ -1,6 +1,5 @@
 package com.chargeflow.charging_session.service;
 
-import com.chargeflow.charging_session.calculator.ChargingSessionCalculator;
 import com.chargeflow.charging_session.dto.ChargingSessionResponse;
 import com.chargeflow.messaging.contract.command.RemoteStartCommand;
 import com.chargeflow.charging_session.dto.RemoteStartResultEvent;
@@ -27,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
 import java.util.EnumSet;
 import java.util.List;
 
@@ -43,12 +41,10 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
     private final RemoteStartCommandPublisher remoteStartCommandPublisher;
     private final ChargingSessionAuditLogger chargingSessionAuditLogger;
     private final StationAvailabilityValidator stationAvailabilityValidator;
+    private final ChargingSessionLifecycleHelper chargingSessionLifecycleHelper;
 
     private static final EnumSet<ChargingStatus> ACTIVE_STATUSES =
             EnumSet.of(ChargingStatus.PENDING, ChargingStatus.IN_PROGRESS);
-    private static final EnumSet<ChargingStatus> TERMINAL_STATUSES =
-            EnumSet.of(ChargingStatus.COMPLETED, ChargingStatus.FAILED, ChargingStatus.CANCELLED);
-    private final ChargingSessionCalculator chargingSessionCalculator;
 
     @Override
     public ChargingSessionResponse startSession(String userEmail, StartSessionRequest request) {
@@ -65,6 +61,11 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
         if (!connector.getStation().getId().equals(station.getId())) {
             throw new ConflictException("Connector does not belong to station");
         }
+
+        chargingSessionLifecycleHelper.expireTimedOutPendingSessionsForUser(userEmail);
+        chargingSessionLifecycleHelper.expireTimedOutPendingSession(
+                sessionRepository.findByConnectorIdAndStatus(connector.getId(), ChargingStatus.PENDING)
+                .orElse(null));
 
         validateStationIsKnown(station);
         stationAvailabilityValidator.validateStationIsOnline(station);
@@ -98,6 +99,8 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
         ChargingSession session = sessionRepository.findById(event.getSessionId())
                 .orElseThrow(() -> new NotFoundException("Session not found"));
 
+        chargingSessionLifecycleHelper.expireTimedOutPendingSession(session);
+
         if (session.getStatus() != ChargingStatus.PENDING) {
             return;
         }
@@ -125,10 +128,23 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
         ChargingSession session = sessionRepository.findByIdAndUserEmail(sessionId, userEmail)
                 .orElseThrow(() -> new NotFoundException("Session not found"));
 
-        ChargingSession finalized = finalizeSession(
+        chargingSessionLifecycleHelper.expireTimedOutPendingSession(session);
+
+        if (session.getStatus() != ChargingStatus.PENDING && session.getStatus() != ChargingStatus.IN_PROGRESS) {
+            throw new ConflictException("Only pending or active sessions can be stopped");
+        }
+
+        ChargingStatus requestedStatus = session.getStatus() == ChargingStatus.PENDING
+                ? ChargingStatus.CANCELLED
+                : ChargingStatus.COMPLETED;
+        String stopReason = session.getStatus() == ChargingStatus.PENDING
+                ? "User cancelled pending charging session"
+                : "User manually stopped charging";
+
+        ChargingSession finalized = chargingSessionLifecycleHelper.applyStatusTransition(
                 session,
-                ChargingStatus.COMPLETED,
-                "User manually stopped charging"
+                requestedStatus,
+                stopReason
         );
 
         return ChargingSessionMapper.toResponse(finalized);
@@ -136,6 +152,8 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
 
     @Override
     public List<ChargingSessionResponse> getMySessions(String userEmail) {
+        chargingSessionLifecycleHelper.expireTimedOutPendingSessionsForUser(userEmail);
+
         return sessionRepository.findByUserEmail(userEmail)
                 .stream()
                 .map(ChargingSessionMapper::toResponse)
@@ -147,67 +165,9 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
         ChargingSession session = sessionRepository.findByIdAndUserEmail(sessionId, userEmail)
                 .orElseThrow(() -> new NotFoundException("Session not found"));
 
+        chargingSessionLifecycleHelper.expireTimedOutPendingSession(session);
+
         return ChargingSessionMapper.toResponse(session);
-    }
-
-    @Override
-    public ChargingSessionResponse finalizeSessionInternal(Long sessionId, ChargingStatus status, String stopReason) {
-        ChargingSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new NotFoundException("Charging session with id " + sessionId + " was not found"));
-
-        ChargingSession finalized = finalizeSession(session, status, stopReason);
-
-        return ChargingSessionMapper.toResponse(finalized);
-    }
-
-    //helpers
-    private ChargingSession finalizeSession(
-            ChargingSession session,
-            ChargingStatus newStatus,
-            String stopReason
-    ) {
-
-        validateStatusTransition(session.getStatus(), newStatus);
-
-        if (session.getStatus() != ChargingStatus.IN_PROGRESS) {
-            throw new ConflictException("Session is not active");
-        }
-
-        session.setStatus(newStatus);
-        session.setStopReason(stopReason);
-
-        if (session.getEndedAt() == null) {
-            session.setEndedAt(OffsetDateTime.now());
-        }
-
-        chargingSessionCalculator.recalculateSessionTotals(session);
-
-        if (newStatus == ChargingStatus.COMPLETED && session.getTotalPrice() != null) {
-            User user = session.getUser();
-            user.setBalance(user.getBalance().subtract(session.getTotalPrice()));
-        }
-
-        session.getConnector().setConnectorStatus(ConnectorStatus.AVAILABLE);
-
-        return sessionRepository.save(session);
-    }
-
-    private void validateStatusTransition(ChargingStatus currentStatus, ChargingStatus requestedStatus) {
-        if (currentStatus == requestedStatus) {
-            return;
-        }
-
-        if (currentStatus != ChargingStatus.IN_PROGRESS) {
-            throw new ConflictException("Only active sessions can be finalized");
-        }
-
-        if (TERMINAL_STATUSES.contains(currentStatus)) {
-            throw new ConflictException("Cannot change status of a finished charging session");
-        }
-
-        if (requestedStatus == ChargingStatus.PENDING) {
-            throw new ConflictException("Charging session status cannot transition back to PENDING");
-        }
     }
 
     private void validateStationIsKnown(Station station) {
