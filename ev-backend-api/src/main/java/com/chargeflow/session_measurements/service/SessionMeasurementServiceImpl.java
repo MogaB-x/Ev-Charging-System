@@ -6,6 +6,8 @@ import com.chargeflow.charging_session.entity.ChargingStatus;
 import com.chargeflow.charging_session.repository.ChargingSessionRepository;
 import com.chargeflow.common.exception.ConflictException;
 import com.chargeflow.common.exception.NotFoundException;
+import com.chargeflow.logger.SessionMeasurementAuditLogger;
+import com.chargeflow.messaging.contract.event.MeterValuesReceivedEvent;
 import com.chargeflow.session_measurements.dto.CreateSessionMeasurementRequest;
 import com.chargeflow.session_measurements.dto.SessionMeasurementResponse;
 import com.chargeflow.session_measurements.entity.SessionMeasurement;
@@ -14,9 +16,11 @@ import com.chargeflow.session_measurements.repository.SessionMeasurementReposito
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @Transactional
@@ -26,6 +30,71 @@ public class SessionMeasurementServiceImpl implements SessionMeasurementService 
     private final SessionMeasurementRepository measurementRepository;
     private final ChargingSessionRepository chargingSessionRepository;
     private final ChargingSessionCalculator chargingSessionCalculator;
+    private final SessionMeasurementAuditLogger sessionMeasurementAuditLogger;
+
+    @Override
+    public void handleMeterValuesEvent(MeterValuesReceivedEvent event) {
+        sessionMeasurementAuditLogger.meterValuesReceived(
+                event.getSessionId(),
+                event.getStationIdentity(),
+                event.getConnectorNumber(),
+                event.getOcppTransactionId()
+        );
+
+        if (event.getSessionId() == null) {
+            logMeterValuesIgnored(event, "Missing session id");
+            return;
+        }
+
+        try {
+            ChargingSession session = chargingSessionRepository.findById(event.getSessionId())
+                    .orElseThrow(() -> new NotFoundException("Charging session was not found"));
+
+            if (session.getStatus() != ChargingStatus.IN_PROGRESS) {
+                logMeterValuesIgnored(event, "Charging session is not in progress");
+                return;
+            }
+
+            if (!Objects.equals(event.getStationIdentity(), session.getStation().getOcppIdentity())) {
+                logMeterValuesIgnored(event, "Station identity does not match the charging session");
+                return;
+            }
+
+            if (!Objects.equals(event.getConnectorNumber(), session.getConnector().getConnectorNumber())) {
+                logMeterValuesIgnored(event, "Connector number does not match the charging session");
+                return;
+            }
+
+            if (!StringUtils.hasText(event.getOcppTransactionId())) {
+                logMeterValuesIgnored(event, "Missing OCPP transaction id");
+                return;
+            }
+
+            if (!Objects.equals(event.getOcppTransactionId(), session.getOcppTransactionId())) {
+                logMeterValuesIgnored(event, "OCPP transaction id does not match the charging session");
+                return;
+            }
+
+            saveMeasurementAndUpdateSession(session, event);
+            sessionMeasurementAuditLogger.meterValuesProcessed(
+                    session.getId(),
+                    session.getStation().getOcppIdentity(),
+                    session.getConnector().getConnectorNumber(),
+                    session.getOcppTransactionId(),
+                    event.getMeterValueWh()
+            );
+        } catch (NotFoundException | ConflictException ex) {
+            logMeterValuesIgnored(event, ex.getMessage());
+        }catch (Exception ex) {
+            sessionMeasurementAuditLogger.unexpectedError(
+                    "handleMeterValuesEvent",
+                    String.valueOf(event.getSessionId()),
+                    ex
+            );
+            throw ex;
+        }
+    }
+
 
     @Override
     public SessionMeasurementResponse createMeasurement(Long sessionId, CreateSessionMeasurementRequest request) {
@@ -90,5 +159,37 @@ public class SessionMeasurementServiceImpl implements SessionMeasurementService 
                     throw new ConflictException("Meter value cannot be lower than the latest recorded measurement");
                 });
     }
+
+    private void saveMeasurementAndUpdateSession(
+            ChargingSession session,
+            MeterValuesReceivedEvent event
+    ) {
+        validateMeterValue(session, event.getMeterValueWh());
+
+        SessionMeasurement measurement = SessionMeasurementMapper.toEntity(event, session);
+
+        measurementRepository.save(measurement);
+
+        BigDecimal avgPower = measurementRepository.findAveragePowerKwByChargingSessionId(session.getId());
+
+        chargingSessionCalculator.updateLiveAggregates(
+                session,
+                event.getMeterValueWh(),
+                avgPower
+        );
+
+        chargingSessionRepository.save(session);
+    }
+
+    private void logMeterValuesIgnored(MeterValuesReceivedEvent event, String reason) {
+        sessionMeasurementAuditLogger.meterValuesIgnored(
+                event.getSessionId(),
+                event.getStationIdentity(),
+                event.getConnectorNumber(),
+                event.getOcppTransactionId(),
+                reason
+        );
+    }
+
 
 }

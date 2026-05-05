@@ -1,5 +1,6 @@
 package com.chargeflow.messaging.config;
 
+import com.rabbitmq.client.AMQP;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
@@ -21,12 +22,18 @@ public class RabbitMqConfig {
     public static final String CORE_CONNECTOR_STATUS_QUEUE = "core.connector.status.queue";
     public static final String GATEWAY_REMOTE_START_QUEUE = "gateway.remote_start.queue";
     public static final String CORE_REMOTE_START_RESULT_QUEUE = "core.remote_start_result.queue";
+    public static final String CORE_TRANSACTION_STARTED_QUEUE = "core.transaction.started.queue";
+    public static final String CORE_METER_VALUES_QUEUE = "core.meter.values.queue";
+    public static final String CORE_TRANSACTION_STOPPED_QUEUE = "core.transaction.stopped.queue";
 
     public static final String STATION_BOOT_ROUTING_KEY = "station.boot";
     public static final String STATION_HEARTBEAT_ROUTING_KEY = "station.heartbeat";
     public static final String CONNECTOR_STATUS_ROUTING_KEY = "connector.status";
     public static final String CHARGING_REMOTE_START_ROUTING_KEY = "charging.remote_start";
     public static final String CHARGING_REMOTE_START_RESULT_ROUTING_KEY = "charging.remote_start.result";
+    public static final String CHARGING_TRANSACTION_STARTED_ROUTING_KEY = "charging.transaction.started";
+    public static final String CHARGING_METER_VALUES_ROUTING_KEY = "charging.meter.values";
+    public static final String CHARGING_TRANSACTION_STOPPED_ROUTING_KEY = "charging.transaction.stopped";
 
 
 
@@ -60,6 +67,15 @@ public class RabbitMqConfig {
     public Queue gatewayRemoteStartQueue() {
         return new Queue(GATEWAY_REMOTE_START_QUEUE, true);
     }
+
+    @Bean
+    public Queue coreTransactionStartedQueue() { return new Queue(CORE_TRANSACTION_STARTED_QUEUE, true);}
+
+    @Bean
+    public Queue coreMeterValuesQueue() {return new Queue(CORE_METER_VALUES_QUEUE, true);}
+
+    @Bean
+    public Queue coreTransactionStoppedQueue() { return new Queue(CORE_TRANSACTION_STOPPED_QUEUE, true);}
 
     @Bean
     public Binding stationBootBinding(Queue coreStationBootQueue, DirectExchange evEventsExchange) {
@@ -100,6 +116,32 @@ public class RabbitMqConfig {
                 .bind(coreRemoteStartResultQueue)
                 .to(evEventsExchange)
                 .with(CHARGING_REMOTE_START_RESULT_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding chargingTransactionStartedBinding(Queue coreTransactionStartedQueue,
+                                              DirectExchange evEventsExchange){
+        return BindingBuilder
+                .bind(coreTransactionStartedQueue)
+                .to(evEventsExchange)
+                .with(CHARGING_TRANSACTION_STARTED_ROUTING_KEY);
+
+    }
+
+    @Bean
+    public Binding meterValuesBinding(Queue coreMeterValuesQueue, DirectExchange evEventsExchange) {
+        return BindingBuilder
+                .bind(coreMeterValuesQueue)
+                .to(evEventsExchange)
+                .with(CHARGING_METER_VALUES_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding transactionStoppedBinding(Queue coreTransactionStoppedQueue, DirectExchange evEventsExchange) {
+        return BindingBuilder
+                .bind(coreTransactionStoppedQueue)
+                .to(evEventsExchange)
+                .with(CHARGING_TRANSACTION_STOPPED_ROUTING_KEY);
     }
 
     @Bean

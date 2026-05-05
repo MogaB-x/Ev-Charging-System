@@ -1,5 +1,6 @@
 package com.chargeflow.session_measurements.service;
 
+import com.chargeflow.messaging.contract.event.MeterValuesReceivedEvent;
 import com.chargeflow.session_measurements.dto.CreateSessionMeasurementRequest;
 import com.chargeflow.session_measurements.dto.SessionMeasurementResponse;
 
@@ -9,4 +10,7 @@ public interface SessionMeasurementService {
     SessionMeasurementResponse createMeasurement(Long sessionId, CreateSessionMeasurementRequest request);
 
     List<SessionMeasurementResponse> getMeasurementsBySessionId(Long chargingSessionId);
+
+    void handleMeterValuesEvent(MeterValuesReceivedEvent event);
+
 }

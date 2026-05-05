@@ -54,6 +54,29 @@ public class ChargingSessionLifecycleHelper {
         throw new ConflictException("Cannot change status of a finished charging session");
     }
 
+    public ChargingSession startPendingSession(
+            ChargingSession session,
+            OffsetDateTime startedAt,
+            String ocppTransactionId,
+            Long meterStartWh
+    ) {
+        if (session.getStatus() != ChargingStatus.PENDING) {
+            throw new ConflictException("Only pending sessions can be started");
+        }
+
+        session.setStartedAt(startedAt != null ? startedAt : OffsetDateTime.now());
+        session.setOcppTransactionId(ocppTransactionId);
+
+        if (meterStartWh != null) {
+            session.setMeterStartWh(meterStartWh);
+            session.setMeterStopWh(meterStartWh);
+        }
+
+        session.setStatus(ChargingStatus.IN_PROGRESS);
+        session.getConnector().setConnectorStatus(ConnectorStatus.CHARGING);
+        return sessionRepository.save(session);
+    }
+
     public void expireTimedOutPendingSessionsForUser(String userEmail) {
         sessionRepository.findByUserEmailAndStatus(userEmail, ChargingStatus.PENDING)
                 .forEach(this::expireTimedOutPendingSession);
@@ -80,12 +103,12 @@ public class ChargingSessionLifecycleHelper {
             String stopReason
     ) {
         if (newStatus == ChargingStatus.IN_PROGRESS) {
-            session.setStatus(ChargingStatus.IN_PROGRESS);
-            if (session.getStartedAt() == null) {
-                session.setStartedAt(OffsetDateTime.now());
-            }
-            session.getConnector().setConnectorStatus(ConnectorStatus.CHARGING);
-            return sessionRepository.save(session);
+            return startPendingSession(
+                    session,
+                    session.getStartedAt(),
+                    session.getOcppTransactionId(),
+                    session.getMeterStartWh()
+            );
         }
 
         if (newStatus == ChargingStatus.FAILED || newStatus == ChargingStatus.CANCELLED) {

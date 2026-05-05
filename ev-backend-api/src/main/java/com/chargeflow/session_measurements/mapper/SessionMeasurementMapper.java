@@ -1,6 +1,7 @@
 package com.chargeflow.session_measurements.mapper;
 
 import com.chargeflow.charging_session.entity.ChargingSession;
+import com.chargeflow.messaging.contract.event.MeterValuesReceivedEvent;
 import com.chargeflow.session_measurements.dto.CreateSessionMeasurementRequest;
 import com.chargeflow.session_measurements.dto.SessionMeasurementResponse;
 import com.chargeflow.session_measurements.entity.SessionMeasurement;
@@ -34,4 +35,16 @@ public final class SessionMeasurementMapper {
                 sessionMeasurements.getMeterValueWh()
         );
     }
+
+    public static SessionMeasurement toEntity(MeterValuesReceivedEvent event, ChargingSession session) {
+        SessionMeasurement measurement = new SessionMeasurement();
+        measurement.setChargingSession(session);
+        measurement.setRecordedAt(OffsetDateTime.now());
+        measurement.setPowerKw(event.getPowerKw());
+        measurement.setVoltageV(event.getVoltageV());
+        measurement.setCurrentA(event.getCurrentA());
+        measurement.setMeterValueWh(event.getMeterValueWh());
+        return measurement;
+    }
+
 }

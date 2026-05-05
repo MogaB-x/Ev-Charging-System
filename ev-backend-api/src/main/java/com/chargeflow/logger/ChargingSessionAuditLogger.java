@@ -22,6 +22,69 @@ public class ChargingSessionAuditLogger {
         LOGGER.info("CHARGING_SESSION_REMOTE_START_ACCEPTED sessionId={}", sessionId);
     }
 
+    public void transactionStartedIgnored(
+            Long sessionId,
+            String stationIdentity,
+            Integer connectorNumber,
+            String reason
+    ) {
+        LOGGER.warn(
+                "CHARGING_SESSION_TRANSACTION_STARTED_IGNORED sessionId={} stationIdentity={} connectorNumber={} reason={}",
+                sessionId,
+                stationIdentity,
+                connectorNumber,
+                reason
+        );
+    }
+
+    public void transactionStartedSuccess(Long sessionId, String ocppTransactionId) {
+        LOGGER.info(
+                "CHARGING_SESSION_TRANSACTION_STARTED_SUCCESS sessionId={} ocppTransactionId={}",
+                sessionId,
+                ocppTransactionId
+        );
+    }
+
+    public void transactionStoppedReceived(
+            Long sessionId,
+            String stationIdentity,
+            Integer connectorNumber,
+            String ocppTransactionId
+    ) {
+        LOGGER.info(
+                "CHARGING_SESSION_TRANSACTION_STOPPED_RECEIVED sessionId={} stationIdentity={} connectorNumber={} ocppTransactionId={}",
+                sessionId,
+                stationIdentity,
+                connectorNumber,
+                ocppTransactionId
+        );
+    }
+
+    public void transactionStoppedIgnored(
+            Long sessionId,
+            String stationIdentity,
+            Integer connectorNumber,
+            String ocppTransactionId,
+            String reason
+    ) {
+        LOGGER.warn(
+                "CHARGING_SESSION_TRANSACTION_STOPPED_IGNORED sessionId={} stationIdentity={} connectorNumber={} ocppTransactionId={} reason={}",
+                sessionId,
+                stationIdentity,
+                connectorNumber,
+                ocppTransactionId,
+                reason
+        );
+    }
+
+    public void transactionStoppedSuccess(Long sessionId, String ocppTransactionId) {
+        LOGGER.info(
+                "CHARGING_SESSION_TRANSACTION_STOPPED_SUCCESS sessionId={} ocppTransactionId={}",
+                sessionId,
+                ocppTransactionId
+        );
+    }
+
     public void unexpectedError(String action, String reference, Exception ex) {
         LOGGER.error(
                 "CHARGING_SESSION_UNEXPECTED_ERROR action={} reference={} message={}",

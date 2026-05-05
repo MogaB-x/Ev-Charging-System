@@ -17,6 +17,12 @@ public class RabbitMqConfig {
 
     public static final String CHARGING_REMOTE_START_RESULT_ROUTING_KEY = "charging.remote_start.result";
 
+    public static final String CHARGING_TRANSACTION_STARTED_ROUTING_KEY = "charging.transaction.started";
+
+    public static final String CHARGING_METER_VALUES_ROUTING_KEY = "charging.meter.values";
+
+    public static final String CHARGING_TRANSACTION_STOPPED_ROUTING_KEY = "charging.transaction.stopped";
+
     @Bean
     public DirectExchange evEventsExchange(){
         return new DirectExchange(EV_EVENTS_EXCHANGE);

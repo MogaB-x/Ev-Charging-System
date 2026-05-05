@@ -1,8 +1,7 @@
 package com.evgateway.messaging.publisher;
 
 import com.evgateway.messaging.config.RabbitMqConfig;
-import com.evgateway.messaging.contract.event.StationBootReceivedEvent;
-import com.evgateway.messaging.contract.event.StationHeartbeatReceivedEvent;
+import com.evgateway.messaging.contract.event.*;
 import lombok.AllArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
@@ -35,4 +34,29 @@ public class StationEventPublisher {
                 event
         );
     }
+
+    public void publishTransactionStarted(TransactionStartedEvent event){
+        rabbitTemplate.convertAndSend(
+                RabbitMqConfig.EV_EVENTS_EXCHANGE,
+                RabbitMqConfig.CHARGING_TRANSACTION_STARTED_ROUTING_KEY,
+                event
+        );
+    }
+
+    public void publishMeterValues(MeterValuesReceivedEvent event) {
+        rabbitTemplate.convertAndSend(
+                RabbitMqConfig.EV_EVENTS_EXCHANGE,
+                RabbitMqConfig.CHARGING_METER_VALUES_ROUTING_KEY,
+                event
+        );
+    }
+
+    public void publishTransactionStopped(TransactionStoppedEvent event){
+        rabbitTemplate.convertAndSend(
+                RabbitMqConfig.EV_EVENTS_EXCHANGE,
+                RabbitMqConfig.CHARGING_TRANSACTION_STOPPED_ROUTING_KEY,
+                event
+        );
+    }
+
 }

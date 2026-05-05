@@ -1,9 +1,6 @@
 package com.evgateway.station.inbound;
 
-import com.evgateway.messaging.contract.event.ConnectorStatusReceivedEvent;
-import com.evgateway.messaging.contract.event.RemoteStartResultEvent;
-import com.evgateway.messaging.contract.event.StationBootReceivedEvent;
-import com.evgateway.messaging.contract.event.StationHeartbeatReceivedEvent;
+import com.evgateway.messaging.contract.event.*;
 import com.evgateway.messaging.publisher.RemoteStartResultPublisher;
 import com.evgateway.messaging.publisher.StationEventPublisher;
 import com.evgateway.model.ConnectorStatus;
@@ -16,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.ObjectMapper;
@@ -48,8 +46,108 @@ public class StationMessageProcessor {
             case "HEARTBEAT" -> handleHeartbeat(session, message);
             case "REMOTE_START_RESPONSE" -> handleRemoteStartResponse(message);
             case "CONNECTOR_STATUS" -> handleStatusNotification(session, message);
+            case "TRANSACTION_STARTED" -> handleTransactionStarted(message);
+            case "METER_VALUES" -> handleMeterValues(message);
+            case "STOP_TRANSACTION" -> handleTransactionStopped(message);
             default -> log.warn("unknown message type received: {}", message.getType());
         }
+    }
+
+    private void handleTransactionStopped(StationMessage message) {
+        if (message.getSessionId() == null
+                || !StringUtils.hasText(message.getSessionCode())
+                || !StringUtils.hasText(message.getStationIdentity())
+                || message.getConnectorNumber() == null
+                || !StringUtils.hasText(message.getOcppTransactionId())) {
+            log.warn("invalid STOP_TRANSACTION payload");
+            return;
+        }
+
+        log.info("STOP_TRANSACTION received: station={}, connector={}, sessionId={}",
+                message.getStationIdentity(),
+                message.getConnectorNumber(),
+                message.getSessionId());
+
+        TransactionStoppedEvent event = new TransactionStoppedEvent(
+                message.getStationIdentity(),
+                message.getSessionId(),
+                message.getSessionCode(),
+                message.getConnectorNumber(),
+                message.getOcppTransactionId(),
+                message.getMeterStopWh(),
+                message.getStopReason()
+        );
+
+        stationEventPublisher.publishTransactionStopped(event);
+
+        log.info("STOP_TRANSACTION event published for sessionId={}", message.getSessionId());
+    }
+
+    private void handleMeterValues(StationMessage message) {
+        if (message.getSessionId() == null
+                || !StringUtils.hasText(message.getSessionCode())
+                || !StringUtils.hasText(message.getStationIdentity())
+                || message.getConnectorNumber() == null
+                || !StringUtils.hasText(message.getOcppTransactionId())) {
+            log.warn("invalid METER_VALUES payload");
+            return;
+        }
+
+        log.info("METER_VALUES received: station={}, connector={}, sessionId={}",
+                message.getStationIdentity(),
+                message.getConnectorNumber(),
+                message.getSessionId());
+
+        MeterValuesReceivedEvent event = new MeterValuesReceivedEvent(
+                message.getSessionId(),
+                message.getSessionCode(),
+                message.getStationIdentity(),
+                message.getConnectorNumber(),
+                message.getOcppTransactionId(),
+                message.getPowerKw(),
+                message.getVoltageV(),
+                message.getCurrentA(),
+                message.getMeterValueWh()
+        );
+
+        stationEventPublisher.publishMeterValues(event);
+
+        log.info("METER_VALUES event published for sessionId={}", message.getSessionId());
+    }
+
+
+    private void handleTransactionStarted(StationMessage message) {
+
+        if (message.getSessionId() == null
+                || !StringUtils.hasText(message.getSessionCode())
+                || !StringUtils.hasText(message.getStationIdentity())
+                || message.getConnectorNumber() == null
+                || !StringUtils.hasText(message.getOcppTransactionId())) {
+            log.warn("invalid TRANSACTION_STARTED payload");
+            return;
+        }
+
+        log.info("TRANSACTION_STARTED received: station={}, connector={}, sessionId={}",
+                message.getStationIdentity(),
+                message.getConnectorNumber(),
+                message.getSessionId());
+
+        TransactionStartedEvent event = new TransactionStartedEvent(
+                message.getSessionId(),
+                message.getSessionCode(),
+                message.getStationIdentity(),
+                message.getConnectorNumber(),
+                message.getOcppTransactionId(),
+                message.getMeterStartWh()
+        );
+
+        stationEventPublisher.publishTransactionStarted(event);
+
+        log.info("TRANSACTION_STARTED event published to RabbitMQ for station {} and sessionId {}",
+                message.getStationIdentity(),
+                message.getSessionId()
+        );
+
     }
 
     private void handleRemoteStartResponse(StationMessage message) {
