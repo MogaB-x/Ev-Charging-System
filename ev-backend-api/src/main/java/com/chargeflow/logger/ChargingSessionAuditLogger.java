@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
-@SuppressWarnings("unused")
 public class ChargingSessionAuditLogger {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ChargingSessionAuditLogger.class);
@@ -20,6 +19,21 @@ public class ChargingSessionAuditLogger {
 
     public void remoteStartAccepted(Long sessionId) {
         LOGGER.info("CHARGING_SESSION_REMOTE_START_ACCEPTED sessionId={}", sessionId);
+    }
+
+    public void remoteStartResultIgnored(
+            Long sessionId,
+            String stationIdentity,
+            Integer connectorNumber,
+            String reason
+    ) {
+        LOGGER.warn(
+                "CHARGING_SESSION_REMOTE_START_RESULT_IGNORED sessionId={} stationIdentity={} connectorNumber={} reason={}",
+                sessionId,
+                stationIdentity,
+                connectorNumber,
+                reason
+        );
     }
 
     public void transactionStartedIgnored(

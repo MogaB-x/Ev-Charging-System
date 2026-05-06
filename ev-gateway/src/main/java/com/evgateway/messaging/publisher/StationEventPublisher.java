@@ -27,7 +27,7 @@ public class StationEventPublisher {
         );
     }
 
-    public void publishConnectorNotification(Object event) {
+    public void publishConnectorNotification(ConnectorStatusReceivedEvent event) {
         rabbitTemplate.convertAndSend(
                 RabbitMqConfig.EV_EVENTS_EXCHANGE,
                 RabbitMqConfig.CONNECTOR_STATUS_ROUTING_KEY,

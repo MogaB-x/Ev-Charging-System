@@ -4,6 +4,7 @@ import com.chargeflow.charging_session.calculator.ChargingSessionCalculator;
 import com.chargeflow.charging_session.entity.ChargingSession;
 import com.chargeflow.charging_session.entity.ChargingStatus;
 import com.chargeflow.charging_session.repository.ChargingSessionRepository;
+import com.chargeflow.charging_session.service.ChargingSessionEventValidator;
 import com.chargeflow.common.exception.ConflictException;
 import com.chargeflow.common.exception.NotFoundException;
 import com.chargeflow.logger.SessionMeasurementAuditLogger;
@@ -16,11 +17,10 @@ import com.chargeflow.session_measurements.repository.SessionMeasurementReposito
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -31,6 +31,7 @@ public class SessionMeasurementServiceImpl implements SessionMeasurementService 
     private final ChargingSessionRepository chargingSessionRepository;
     private final ChargingSessionCalculator chargingSessionCalculator;
     private final SessionMeasurementAuditLogger sessionMeasurementAuditLogger;
+    private final ChargingSessionEventValidator chargingSessionEventValidator;
 
     @Override
     public void handleMeterValuesEvent(MeterValuesReceivedEvent event) {
@@ -50,28 +51,10 @@ public class SessionMeasurementServiceImpl implements SessionMeasurementService 
             ChargingSession session = chargingSessionRepository.findById(event.getSessionId())
                     .orElseThrow(() -> new NotFoundException("Charging session was not found"));
 
-            if (session.getStatus() != ChargingStatus.IN_PROGRESS) {
-                logMeterValuesIgnored(event, "Charging session is not in progress");
-                return;
-            }
-
-            if (!Objects.equals(event.getStationIdentity(), session.getStation().getOcppIdentity())) {
-                logMeterValuesIgnored(event, "Station identity does not match the charging session");
-                return;
-            }
-
-            if (!Objects.equals(event.getConnectorNumber(), session.getConnector().getConnectorNumber())) {
-                logMeterValuesIgnored(event, "Connector number does not match the charging session");
-                return;
-            }
-
-            if (!StringUtils.hasText(event.getOcppTransactionId())) {
-                logMeterValuesIgnored(event, "Missing OCPP transaction id");
-                return;
-            }
-
-            if (!Objects.equals(event.getOcppTransactionId(), session.getOcppTransactionId())) {
-                logMeterValuesIgnored(event, "OCPP transaction id does not match the charging session");
+            Optional<String> meterValuesValidation =
+                    chargingSessionEventValidator.validateMeterValues(session, event);
+            if (meterValuesValidation.isPresent()) {
+                logMeterValuesIgnored(event, meterValuesValidation.get());
                 return;
             }
 

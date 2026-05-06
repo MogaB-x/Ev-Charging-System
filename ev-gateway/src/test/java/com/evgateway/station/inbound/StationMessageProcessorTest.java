@@ -1,16 +1,15 @@
 package com.evgateway.station.inbound;
 
-import com.evgateway.station.registry.StationRegistryService;
+import com.evgateway.station.inbound.handler.StationInboundMessageHandler;
+import com.evgateway.websocket.dto.StationMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.ObjectMapper;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.util.List;
+
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -18,68 +17,38 @@ import static org.mockito.Mockito.when;
 
 class StationMessageProcessorTest {
 
-    private StationRegistryService stationRegistryService;
-    private com.evgateway.messaging.publisher.RemoteStartResultPublisher remoteStartResultPublisher;
-    private com.evgateway.messaging.publisher.StationEventPublisher stationEventPublisher;
     private WebSocketSession session;
+    private StationInboundMessageHandler heartbeatHandler;
+    private StationInboundMessageHandler remoteStartResponseHandler;
     private StationMessageProcessor stationMessageProcessor;
 
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper();
-        stationRegistryService = mock(StationRegistryService.class);
-        remoteStartResultPublisher = mock(com.evgateway.messaging.publisher.RemoteStartResultPublisher.class);
-        stationEventPublisher = mock(com.evgateway.messaging.publisher.StationEventPublisher.class);
         session = mock(WebSocketSession.class);
+
+        heartbeatHandler = mock(StationInboundMessageHandler.class);
+        when(heartbeatHandler.getMessageType()).thenReturn("HEARTBEAT");
+
+        remoteStartResponseHandler = mock(StationInboundMessageHandler.class);
+        when(remoteStartResponseHandler.getMessageType()).thenReturn("REMOTE_START_RESPONSE");
+
         stationMessageProcessor = new StationMessageProcessor(
                 objectMapper,
-                stationRegistryService,
-                remoteStartResultPublisher,
-                stationEventPublisher
+                List.of(heartbeatHandler, remoteStartResponseHandler)
         );
     }
 
     @Test
-    void processHeartbeatPublishesEventAndRespondsForKnownStation() throws Exception {
-        when(stationRegistryService.updateHeartbeat("station-1")).thenReturn(true);
-
+    void processDispatchesHeartbeatToMatchingHandler() throws Exception {
         stationMessageProcessor.process(session, "{\"type\":\"HEARTBEAT\",\"stationIdentity\":\"station-1\"}");
 
-        verify(stationEventPublisher).publishHeartbeatNotification(any());
-
-        ArgumentCaptor<TextMessage> messageCaptor = ArgumentCaptor.forClass(TextMessage.class);
-        verify(session).sendMessage(messageCaptor.capture());
-
-        String payload = messageCaptor.getValue().getPayload();
-        assertTrue(payload.contains("HEARTBEAT_RESPONSE"));
-        assertTrue(payload.contains("currentTime"));
+        verify(heartbeatHandler).handle(any(WebSocketSession.class), any(StationMessage.class));
+        verify(remoteStartResponseHandler, never()).handle(any(WebSocketSession.class), any(StationMessage.class));
     }
 
     @Test
-    void processHeartbeatDoesNotPublishForUnknownStation() throws Exception {
-        when(stationRegistryService.updateHeartbeat("station-unknown")).thenReturn(false);
-
-        stationMessageProcessor.process(session, "{\"type\":\"HEARTBEAT\",\"stationIdentity\":\"station-unknown\"}");
-
-        verify(stationEventPublisher, never()).publishHeartbeatNotification(any());
-        verify(session, never()).sendMessage(any(TextMessage.class));
-    }
-
-    @Test
-    void processHeartbeatDoesNotRespondWhenPublishFails() throws Exception {
-        when(stationRegistryService.updateHeartbeat("station-1")).thenReturn(true);
-        doThrow(new RuntimeException("rabbit down"))
-                .when(stationEventPublisher)
-                .publishHeartbeatNotification(any());
-
-        stationMessageProcessor.process(session, "{\"type\":\"HEARTBEAT\",\"stationIdentity\":\"station-1\"}");
-
-        verify(stationEventPublisher).publishHeartbeatNotification(any());
-        verify(session, never()).sendMessage(any(TextMessage.class));
-    }
-
-    @Test
-    void processRemoteStartResponsePublishesRemoteStartResult() throws Exception {
+    void processDispatchesRemoteStartResponseToMatchingHandler() throws Exception {
         stationMessageProcessor.process(
                 session,
                 "{" +
@@ -92,8 +61,23 @@ class StationMessageProcessorTest {
                         "}"
         );
 
-        verify(remoteStartResultPublisher).publishRemoteStartResponse(any());
-        verify(session, never()).sendMessage(any(TextMessage.class));
+        verify(remoteStartResponseHandler).handle(any(WebSocketSession.class), any(StationMessage.class));
+        verify(heartbeatHandler, never()).handle(any(WebSocketSession.class), any(StationMessage.class));
+    }
+
+    @Test
+    void processIgnoresMessagesWithoutType() throws Exception {
+        stationMessageProcessor.process(session, "{\"stationIdentity\":\"station-1\"}");
+
+        verify(heartbeatHandler, never()).handle(any(WebSocketSession.class), any(StationMessage.class));
+        verify(remoteStartResponseHandler, never()).handle(any(WebSocketSession.class), any(StationMessage.class));
+    }
+
+    @Test
+    void processIgnoresUnknownMessageType() throws Exception {
+        stationMessageProcessor.process(session, "{\"type\":\"UNKNOWN\",\"stationIdentity\":\"station-1\"}");
+
+        verify(heartbeatHandler, never()).handle(any(WebSocketSession.class), any(StationMessage.class));
+        verify(remoteStartResponseHandler, never()).handle(any(WebSocketSession.class), any(StationMessage.class));
     }
 }
-

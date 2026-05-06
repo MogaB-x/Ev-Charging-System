@@ -17,7 +17,7 @@ public class DefaultChargingSessionCalculator implements ChargingSessionCalculat
     ) {
         if (meterValueWh != null) {
             if (session.getMeterStartWh() == null) {
-                session.setMeterStartWh(meterValueWh);
+                throw new ConflictException("Meter start value must be set before live aggregates are updated");
             }
 
             session.setMeterStopWh(meterValueWh);

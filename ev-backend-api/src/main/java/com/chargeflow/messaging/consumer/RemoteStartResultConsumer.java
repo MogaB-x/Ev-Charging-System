@@ -1,6 +1,6 @@
 package com.chargeflow.messaging.consumer;
 
-import com.chargeflow.charging_session.dto.RemoteStartResultEvent;
+import com.chargeflow.messaging.contract.event.RemoteStartResultEvent;
 import com.chargeflow.charging_session.service.ChargingSessionServiceImpl;
 import com.chargeflow.messaging.config.RabbitMqConfig;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +24,6 @@ public class RemoteStartResultConsumer {
                 event.getResult(),
                 event.getReason());
 
-        chargingSessionService.handleRemoteStartResult(event);
+        chargingSessionService.handleRemoteStartResultEvent(event);
     }
 }

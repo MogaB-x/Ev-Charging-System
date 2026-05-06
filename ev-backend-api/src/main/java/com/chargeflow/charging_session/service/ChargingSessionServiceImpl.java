@@ -2,7 +2,7 @@ package com.chargeflow.charging_session.service;
 
 import com.chargeflow.charging_session.dto.ChargingSessionResponse;
 import com.chargeflow.messaging.contract.command.RemoteStartCommand;
-import com.chargeflow.charging_session.dto.RemoteStartResultEvent;
+import com.chargeflow.messaging.contract.event.RemoteStartResultEvent;
 import com.chargeflow.charging_session.dto.StartSessionRequest;
 import com.chargeflow.charging_session.entity.ChargingSession;
 import com.chargeflow.charging_session.entity.ChargingStatus;
@@ -31,7 +31,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -46,21 +46,18 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
     private final ChargingSessionAuditLogger chargingSessionAuditLogger;
     private final StationAvailabilityValidator stationAvailabilityValidator;
     private final ChargingSessionLifecycleHelper chargingSessionLifecycleHelper;
+    private final ChargingSessionEventValidator chargingSessionEventValidator;
 
     private static final EnumSet<ChargingStatus> ACTIVE_STATUSES =
             EnumSet.of(ChargingStatus.PENDING, ChargingStatus.IN_PROGRESS);
 
     @Override
     public ChargingSessionResponse startSession(String userEmail, StartSessionRequest request) {
-        User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+        User user = findUserByEmail(userEmail);
 
-        Station station = stationRepository.findById(request.stationId())
-                .orElseThrow(() -> new NotFoundException("Station not found"));
+        Station station = findStationById(request.stationId());
 
-        Connector connector = connectorRepository
-                .findByStationIdAndConnectorNumber(station.getId(), request.connectorNumber())
-                .orElseThrow(() -> new NotFoundException("Connector not found for station and connector number"));
+        Connector connector = findConnectorByStationAndNumber(station.getId(), request.connectorNumber());
 
         if (!connector.getStation().getId().equals(station.getId())) {
             throw new ConflictException("Connector does not belong to station");
@@ -98,108 +95,62 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
     }
 
     @Transactional
-    public void handleRemoteStartResult(RemoteStartResultEvent event) {
+    public void handleRemoteStartResultEvent(RemoteStartResultEvent event) {
         chargingSessionAuditLogger.remoteStartResultReceived(event.getSessionId(), event.getResult());
-        ChargingSession session = sessionRepository.findById(event.getSessionId())
-                .orElseThrow(() -> new NotFoundException("Session not found"));
+        if (event.getSessionId() == null) {
+            logRemoteStartResultIgnored(event, "Missing session id");
+            return;
+        }
+
+        ChargingSession session = findSessionByIdOrNull(event.getSessionId());
+        if (session == null) {
+            logRemoteStartResultIgnored(event, "Charging session was not found");
+            return;
+        }
 
         chargingSessionLifecycleHelper.expireTimedOutPendingSession(session);
 
-        if (session.getStatus() != ChargingStatus.PENDING) {
+        Optional<String> remoteStartResultValidation =
+                chargingSessionEventValidator.validateRemoteStartResult(session, event);
+        if (remoteStartResultValidation.isPresent()) {
+            logRemoteStartResultIgnored(event, remoteStartResultValidation.get());
             return;
         }
 
         if ("REJECTED".equals(event.getResult())) {
-            chargingSessionAuditLogger.remoteStartRejected(event.getSessionId(), event.getReason());
-            session.setStatus(ChargingStatus.FAILED);
-            session.setStopReason(event.getReason());
-
-            Connector connector = session.getConnector();
-            connector.setConnectorStatus(ConnectorStatus.AVAILABLE);
-
-            sessionRepository.save(session);
+            handleRejectedRemoteStartResult(session, event);
             return;
         }
 
         if ("ACCEPTED".equals(event.getResult())) {
-            chargingSessionAuditLogger.remoteStartAccepted(event.getSessionId());
-            sessionRepository.save(session);
+            handleAcceptedRemoteStartResult(session);
         }
     }
 
     public void handleTransactionStartedEvent(TransactionStartedEvent event){
         if (event.getSessionId() == null) {
-            chargingSessionAuditLogger.transactionStartedIgnored(
-                    null,
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    "Missing session id"
-            );
+            logTransactionStartedIgnored(event, "Missing session id");
             return;
         }
 
-        ChargingSession session = sessionRepository.findById(event.getSessionId())
-                .orElse(null);
+        ChargingSession session = findSessionByIdOrNull(event.getSessionId());
 
         if (session == null) {
-            chargingSessionAuditLogger.transactionStartedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    "Charging session was not found"
-            );
+            logTransactionStartedIgnored(event, "Charging session was not found");
             return;
         }
 
         chargingSessionLifecycleHelper.expireTimedOutPendingSession(session);
 
-        if (session.getStatus() != ChargingStatus.PENDING) {
-            chargingSessionAuditLogger.transactionStartedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    "Session is no longer pending"
-            );
-            return;
-        }
-
-        if (!Objects.equals(event.getStationIdentity(), session.getStation().getOcppIdentity())) {
-            chargingSessionAuditLogger.transactionStartedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    "Station identity does not match the pending session"
-            );
-            return;
-        }
-
-        if (!Objects.equals(event.getConnectorNumber(), session.getConnector().getConnectorNumber())) {
-            chargingSessionAuditLogger.transactionStartedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    "Connector number does not match the pending session"
-            );
-            return;
-        }
-
-        if (!StringUtils.hasText(event.getOcppTransactionId())) {
-            chargingSessionAuditLogger.transactionStartedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    "Missing OCPP transaction id"
-            );
+        Optional<String> transactionStartedValidation =
+                chargingSessionEventValidator.validateTransactionStarted(session, event);
+        if (transactionStartedValidation.isPresent()) {
+            logTransactionStartedIgnored(event, transactionStartedValidation.get());
             return;
         }
 
         if (event.getMeterStartWh() != null && event.getMeterStartWh() < 0) {
-            chargingSessionAuditLogger.transactionStartedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    "Invalid meter start value"
-            );
+            logTransactionStartedIgnored(event, "Invalid meter start value");
             return;
         }
 
@@ -221,93 +172,36 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
         );
 
         if (event.getSessionId() == null) {
-            chargingSessionAuditLogger.transactionStoppedIgnored(
-                    null,
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    event.getOcppTransactionId(),
-                    "Missing session id"
-            );
+            logTransactionStoppedIgnored(event, "Missing session id");
             return;
         }
 
-        ChargingSession session = sessionRepository.findById(event.getSessionId())
-                .orElse(null);
+        ChargingSession session = findSessionByIdOrNull(event.getSessionId());
 
         if (session == null) {
-            chargingSessionAuditLogger.transactionStoppedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    event.getOcppTransactionId(),
-                    "Charging session was not found"
-            );
+            logTransactionStoppedIgnored(event, "Charging session was not found");
             return;
         }
 
-        if (session.getStatus() != ChargingStatus.IN_PROGRESS) {
-            chargingSessionAuditLogger.transactionStoppedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    event.getOcppTransactionId(),
-                    "Charging session is not in progress"
-            );
-            return;
-        }
-
-        if (!Objects.equals(event.getStationIdentity(), session.getStation().getOcppIdentity())) {
-            chargingSessionAuditLogger.transactionStoppedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    event.getOcppTransactionId(),
-                    "Station identity does not match the charging session"
-            );
-            return;
-        }
-
-        if (!Objects.equals(event.getConnectorNumber(), session.getConnector().getConnectorNumber())) {
-            chargingSessionAuditLogger.transactionStoppedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    event.getOcppTransactionId(),
-                    "Connector number does not match the charging session"
-            );
-            return;
-        }
-
-        if (!Objects.equals(event.getOcppTransactionId(), session.getOcppTransactionId())) {
-            chargingSessionAuditLogger.transactionStoppedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    event.getOcppTransactionId(),
-                    "OCPP transaction id does not match the charging session"
-            );
+        Optional<String> transactionStoppedValidation =
+                chargingSessionEventValidator.validateTransactionStopped(session, event);
+        if (transactionStoppedValidation.isPresent()) {
+            logTransactionStoppedIgnored(event, transactionStoppedValidation.get());
             return;
         }
 
         if (event.getMeterStopWh() == null) {
-            chargingSessionAuditLogger.transactionStoppedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    event.getOcppTransactionId(),
-                    "Missing meter stop value"
-            );
+            logTransactionStoppedIgnored(event, "Missing meter stop value");
             return;
         }
 
         if (event.getMeterStopWh() < 0) {
-            chargingSessionAuditLogger.transactionStoppedIgnored(
-                    event.getSessionId(),
-                    event.getStationIdentity(),
-                    event.getConnectorNumber(),
-                    event.getOcppTransactionId(),
-                    "Invalid meter stop value"
-            );
+            logTransactionStoppedIgnored(event, "Invalid meter stop value");
+            return;
+        }
+
+        if (session.getMeterStopWh() != null && event.getMeterStopWh() < session.getMeterStopWh()) {
+            logTransactionStoppedIgnored(event, "Meter stop value is lower than the latest known session meter value");
             return;
         }
 
@@ -329,8 +223,7 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
 
     @Override
     public ChargingSessionResponse stopSession(String userEmail, Long sessionId) {
-        ChargingSession session = sessionRepository.findByIdAndUserEmail(sessionId, userEmail)
-                .orElseThrow(() -> new NotFoundException("Session not found"));
+        ChargingSession session = findSessionByIdAndUserEmail(sessionId, userEmail);
 
         chargingSessionLifecycleHelper.expireTimedOutPendingSession(session);
 
@@ -366,12 +259,80 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
 
     @Override
     public ChargingSessionResponse getSessionById(String userEmail, Long sessionId) {
-        ChargingSession session = sessionRepository.findByIdAndUserEmail(sessionId, userEmail)
-                .orElseThrow(() -> new NotFoundException("Session not found"));
+        ChargingSession session = findSessionByIdAndUserEmail(sessionId, userEmail);
 
         chargingSessionLifecycleHelper.expireTimedOutPendingSession(session);
 
         return ChargingSessionMapper.toResponse(session);
+    }
+
+    private User findUserByEmail(String userEmail) {
+        return userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+    }
+
+    private Station findStationById(Long stationId) {
+        return stationRepository.findById(stationId)
+                .orElseThrow(() -> new NotFoundException("Station not found"));
+    }
+
+    private Connector findConnectorByStationAndNumber(Long stationId, Integer connectorNumber) {
+        return connectorRepository.findByStationIdAndConnectorNumber(stationId, connectorNumber)
+                .orElseThrow(() -> new NotFoundException("Connector not found for station and connector number"));
+    }
+
+    private ChargingSession findSessionByIdOrNull(Long sessionId) {
+        return sessionRepository.findById(sessionId).orElse(null);
+    }
+
+    private ChargingSession findSessionByIdAndUserEmail(Long sessionId, String userEmail) {
+        return sessionRepository.findByIdAndUserEmail(sessionId, userEmail)
+                .orElseThrow(() -> new NotFoundException("Session not found"));
+    }
+
+    private void handleRejectedRemoteStartResult(ChargingSession session, RemoteStartResultEvent event) {
+        chargingSessionAuditLogger.remoteStartRejected(event.getSessionId(), event.getReason());
+        String stopReason = StringUtils.hasText(event.getReason())
+                ? event.getReason().trim()
+                : "Remote start rejected by station";
+
+        chargingSessionLifecycleHelper.applyStatusTransition(
+                session,
+                ChargingStatus.FAILED,
+                stopReason
+        );
+    }
+
+    private void handleAcceptedRemoteStartResult(ChargingSession session) {
+        chargingSessionAuditLogger.remoteStartAccepted(session.getId());
+    }
+
+    private void logRemoteStartResultIgnored(RemoteStartResultEvent event, String reason) {
+        chargingSessionAuditLogger.remoteStartResultIgnored(
+                event.getSessionId(),
+                event.getStationIdentity(),
+                event.getConnectorNumber(),
+                reason
+        );
+    }
+
+    private void logTransactionStartedIgnored(TransactionStartedEvent event, String reason) {
+        chargingSessionAuditLogger.transactionStartedIgnored(
+                event.getSessionId(),
+                event.getStationIdentity(),
+                event.getConnectorNumber(),
+                reason
+        );
+    }
+
+    private void logTransactionStoppedIgnored(TransactionStoppedEvent event, String reason) {
+        chargingSessionAuditLogger.transactionStoppedIgnored(
+                event.getSessionId(),
+                event.getStationIdentity(),
+                event.getConnectorNumber(),
+                event.getOcppTransactionId(),
+                reason
+        );
     }
 
     private void validateStationIsKnown(Station station) {
