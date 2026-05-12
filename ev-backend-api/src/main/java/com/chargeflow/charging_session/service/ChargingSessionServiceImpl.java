@@ -2,7 +2,9 @@ package com.chargeflow.charging_session.service;
 
 import com.chargeflow.charging_session.dto.ChargingSessionResponse;
 import com.chargeflow.messaging.contract.command.RemoteStartCommand;
+import com.chargeflow.messaging.contract.command.RemoteStopCommand;
 import com.chargeflow.messaging.contract.event.RemoteStartResultEvent;
+import com.chargeflow.messaging.contract.event.RemoteStopResultEvent;
 import com.chargeflow.charging_session.dto.StartSessionRequest;
 import com.chargeflow.charging_session.entity.ChargingSession;
 import com.chargeflow.charging_session.entity.ChargingStatus;
@@ -15,6 +17,7 @@ import com.chargeflow.connector.entity.ConnectorStatus;
 import com.chargeflow.connector.repository.ConnectorRepository;
 import com.chargeflow.logger.ChargingSessionAuditLogger;
 import com.chargeflow.messaging.RemoteStartCommandPublisher;
+import com.chargeflow.messaging.RemoteStopCommandPublisher;
 import com.chargeflow.messaging.contract.event.TransactionStartedEvent;
 import com.chargeflow.messaging.contract.event.TransactionStoppedEvent;
 import com.chargeflow.station.entity.Station;
@@ -43,6 +46,7 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
     private final ConnectorRepository connectorRepository;
     private final UserRepository userRepository;
     private final RemoteStartCommandPublisher remoteStartCommandPublisher;
+    private final RemoteStopCommandPublisher remoteStopCommandPublisher;
     private final ChargingSessionAuditLogger chargingSessionAuditLogger;
     private final StationAvailabilityValidator stationAvailabilityValidator;
     private final ChargingSessionLifecycleHelper chargingSessionLifecycleHelper;
@@ -124,6 +128,37 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
 
         if ("ACCEPTED".equals(event.getResult())) {
             handleAcceptedRemoteStartResult(session);
+        }
+    }
+
+    public void handleRemoteStopResultEvent(RemoteStopResultEvent event) {
+        chargingSessionAuditLogger.remoteStopResultReceived(event.getSessionId(), event.getResult());
+
+        if (event.getSessionId() == null) {
+            logRemoteStopResultIgnored(event, "Missing session id");
+            return;
+        }
+
+        ChargingSession session = findSessionByIdOrNull(event.getSessionId());
+        if (session == null) {
+            logRemoteStopResultIgnored(event, "Charging session was not found");
+            return;
+        }
+
+        Optional<String> remoteStopResultValidation =
+                chargingSessionEventValidator.validateRemoteStopResult(session, event);
+        if (remoteStopResultValidation.isPresent()) {
+            logRemoteStopResultIgnored(event, remoteStopResultValidation.get());
+            return;
+        }
+
+        if ("REJECTED".equals(event.getResult())) {
+            chargingSessionAuditLogger.remoteStopRejected(event.getSessionId(), event.getReason());
+            return;
+        }
+
+        if ("ACCEPTED".equals(event.getResult())) {
+            chargingSessionAuditLogger.remoteStopAccepted(event.getSessionId());
         }
     }
 
@@ -231,20 +266,28 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
             throw new ConflictException("Only pending or active sessions can be stopped");
         }
 
-        ChargingStatus requestedStatus = session.getStatus() == ChargingStatus.PENDING
-                ? ChargingStatus.CANCELLED
-                : ChargingStatus.COMPLETED;
-        String stopReason = session.getStatus() == ChargingStatus.PENDING
-                ? "User cancelled pending charging session"
-                : "User manually stopped charging";
+        if (session.getStatus() == ChargingStatus.PENDING) {
+            ChargingSession cancelled = chargingSessionLifecycleHelper.applyStatusTransition(
+                    session,
+                    ChargingStatus.CANCELLED,
+                    "User cancelled pending charging session"
+            );
 
-        ChargingSession finalized = chargingSessionLifecycleHelper.applyStatusTransition(
-                session,
-                requestedStatus,
-                stopReason
+            return ChargingSessionMapper.toResponse(cancelled);
+        }
+
+        if (!StringUtils.hasText(session.getOcppTransactionId())) {
+            throw new ConflictException("Charging session cannot be stopped remotely without an OCPP transaction id");
+        }
+
+        remoteStopCommandPublisher.publish(buildRemoteStopCommand(session));
+        chargingSessionAuditLogger.remoteStopCommandPublished(
+                session.getId(),
+                session.getStation().getOcppIdentity(),
+                session.getConnector().getConnectorNumber()
         );
 
-        return ChargingSessionMapper.toResponse(finalized);
+        return ChargingSessionMapper.toResponse(session);
     }
 
     @Override
@@ -316,6 +359,16 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
         );
     }
 
+    private void logRemoteStopResultIgnored(RemoteStopResultEvent event, String reason) {
+        chargingSessionAuditLogger.remoteStopResultIgnored(
+                event.getSessionId(),
+                event.getStationIdentity(),
+                event.getConnectorNumber(),
+                event.getOcppTransactionId(),
+                reason
+        );
+    }
+
     private void logTransactionStartedIgnored(TransactionStartedEvent event, String reason) {
         chargingSessionAuditLogger.transactionStartedIgnored(
                 event.getSessionId(),
@@ -348,6 +401,17 @@ public class ChargingSessionServiceImpl implements ChargingSessionService{
                 session.getStation().getOcppIdentity(),
                 session.getConnector().getConnectorNumber(),
                 session.getCreatedAt()
+        );
+    }
+
+    private RemoteStopCommand buildRemoteStopCommand(ChargingSession session) {
+        return new RemoteStopCommand(
+                session.getId(),
+                session.getSessionCode(),
+                session.getStation().getOcppIdentity(),
+                session.getConnector().getConnectorNumber(),
+                session.getOcppTransactionId(),
+                OffsetDateTime.now()
         );
     }
 }

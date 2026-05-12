@@ -29,6 +29,7 @@ public class ChargingSessionController {
     }
 
     @PostMapping("/{sessionId}/stop")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public ChargingSessionResponse stopSession(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long sessionId

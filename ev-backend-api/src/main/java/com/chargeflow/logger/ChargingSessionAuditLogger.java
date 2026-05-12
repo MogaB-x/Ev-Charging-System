@@ -36,6 +36,44 @@ public class ChargingSessionAuditLogger {
         );
     }
 
+    public void remoteStopCommandPublished(Long sessionId, String stationIdentity, Integer connectorNumber) {
+        LOGGER.info(
+                "CHARGING_SESSION_REMOTE_STOP_COMMAND_PUBLISHED sessionId={} stationIdentity={} connectorNumber={}",
+                sessionId,
+                stationIdentity,
+                connectorNumber
+        );
+    }
+
+    public void remoteStopResultReceived(Long sessionId, String result) {
+        LOGGER.info("CHARGING_SESSION_REMOTE_STOP_RESULT_RECEIVED sessionId={} result={}", sessionId, result);
+    }
+
+    public void remoteStopResultIgnored(
+            Long sessionId,
+            String stationIdentity,
+            Integer connectorNumber,
+            String ocppTransactionId,
+            String reason
+    ) {
+        LOGGER.warn(
+                "CHARGING_SESSION_REMOTE_STOP_RESULT_IGNORED sessionId={} stationIdentity={} connectorNumber={} ocppTransactionId={} reason={}",
+                sessionId,
+                stationIdentity,
+                connectorNumber,
+                ocppTransactionId,
+                reason
+        );
+    }
+
+    public void remoteStopRejected(Long sessionId, String reason) {
+        LOGGER.warn("CHARGING_SESSION_REMOTE_STOP_REJECTED sessionId={} reason={}", sessionId, reason);
+    }
+
+    public void remoteStopAccepted(Long sessionId) {
+        LOGGER.info("CHARGING_SESSION_REMOTE_STOP_ACCEPTED sessionId={}", sessionId);
+    }
+
     public void transactionStartedIgnored(
             Long sessionId,
             String stationIdentity,

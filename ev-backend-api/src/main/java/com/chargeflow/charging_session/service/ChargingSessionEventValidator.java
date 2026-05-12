@@ -4,6 +4,7 @@ import com.chargeflow.charging_session.entity.ChargingSession;
 import com.chargeflow.charging_session.entity.ChargingStatus;
 import com.chargeflow.messaging.contract.event.MeterValuesReceivedEvent;
 import com.chargeflow.messaging.contract.event.RemoteStartResultEvent;
+import com.chargeflow.messaging.contract.event.RemoteStopResultEvent;
 import com.chargeflow.messaging.contract.event.TransactionStartedEvent;
 import com.chargeflow.messaging.contract.event.TransactionStoppedEvent;
 import org.springframework.stereotype.Component;
@@ -106,6 +107,39 @@ public class ChargingSessionEventValidator {
 
         if (!"ACCEPTED".equals(event.getResult()) && !"REJECTED".equals(event.getResult())) {
             return Optional.of("Invalid remote start result");
+        }
+
+        return Optional.empty();
+    }
+
+    public Optional<String> validateRemoteStopResult(ChargingSession session, RemoteStopResultEvent event) {
+        if (session.getStatus() != ChargingStatus.IN_PROGRESS) {
+            return Optional.of("Charging session is not in progress");
+        }
+
+        Optional<String> ownershipValidation = validateStationAndConnectorOwnership(
+                session,
+                event.getStationIdentity(),
+                event.getConnectorNumber()
+        );
+        if (ownershipValidation.isPresent()) {
+            return ownershipValidation;
+        }
+
+        if (!StringUtils.hasText(event.getOcppTransactionId())) {
+            return Optional.of("Missing OCPP transaction id");
+        }
+
+        if (!Objects.equals(event.getOcppTransactionId(), session.getOcppTransactionId())) {
+            return Optional.of("OCPP transaction id does not match the charging session");
+        }
+
+        if (!StringUtils.hasText(event.getResult())) {
+            return Optional.of("Missing remote stop result");
+        }
+
+        if (!"ACCEPTED".equals(event.getResult()) && !"REJECTED".equals(event.getResult())) {
+            return Optional.of("Invalid remote stop result");
         }
 
         return Optional.empty();
